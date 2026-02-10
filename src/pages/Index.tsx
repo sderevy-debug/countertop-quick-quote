@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import PdfViewer from "@/components/PdfViewer";
 import MeasurementSidebar from "@/components/MeasurementSidebar";
-import { DrawnRectangle } from "@/types/estimation";
+import { DrawnRectangle, CursorMode } from "@/types/estimation";
 
 const Index = () => {
   const [rectangles, setRectangles] = useState<DrawnRectangle[]>([]);
