@@ -2,14 +2,15 @@ import { useRef, useState, useCallback, useEffect } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/esm/Page/AnnotationLayer.css";
 import "react-pdf/dist/esm/Page/TextLayer.css";
-import { DrawnRectangle } from "@/types/estimation";
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Upload } from "lucide-react";
+import { DrawnRectangle, CursorMode } from "@/types/estimation";
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Upload, MousePointer, Plus, Minus } from "lucide-react";
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface PdfViewerProps {
   rectangles: DrawnRectangle[];
   onRectangleDrawn: (rect: Omit<DrawnRectangle, "id" | "label" | "realWidth" | "realHeight" | "area">) => void;
+  onDeleteRect: (id: string) => void;
   scale: number;
   pdfFile: File | null;
   onFileLoad: (file: File) => void;
@@ -18,11 +19,21 @@ interface PdfViewerProps {
   onPageChange: (page: number) => void;
   onTotalPagesChange: (total: number) => void;
   selectedRectId: string | null;
+  onSelectRect: (id: string | null) => void;
+  cursorMode: CursorMode;
+  onCursorModeChange: (mode: CursorMode) => void;
 }
+
+const CURSOR_MODES: { mode: CursorMode; icon: typeof MousePointer; label: string }[] = [
+  { mode: "select", icon: MousePointer, label: "Select" },
+  { mode: "add", icon: Plus, label: "Add" },
+  { mode: "remove", icon: Minus, label: "Remove" },
+];
 
 export default function PdfViewer({
   rectangles,
   onRectangleDrawn,
+  onDeleteRect,
   pdfFile,
   onFileLoad,
   currentPage,
@@ -30,6 +41,9 @@ export default function PdfViewer({
   onPageChange,
   onTotalPagesChange,
   selectedRectId,
+  onSelectRect,
+  cursorMode,
+  onCursorModeChange,
 }: PdfViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [drawing, setDrawing] = useState(false);
@@ -62,27 +76,56 @@ export default function PdfViewer({
     []
   );
 
+  const findRectAtPoint = useCallback(
+    (x: number, y: number) => {
+      const pageRects = rectangles.filter((r) => r.pageNumber === currentPage);
+      // Find topmost (last drawn) rect containing the point
+      for (let i = pageRects.length - 1; i >= 0; i--) {
+        const r = pageRects[i];
+        if (x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height) {
+          return r;
+        }
+      }
+      return null;
+    },
+    [rectangles, currentPage]
+  );
+
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       if (!pdfFile) return;
       const coords = getRelativeCoords(e);
+
+      if (cursorMode === "select") {
+        const rect = findRectAtPoint(coords.x, coords.y);
+        onSelectRect(rect ? rect.id : null);
+        return;
+      }
+
+      if (cursorMode === "remove") {
+        const rect = findRectAtPoint(coords.x, coords.y);
+        if (rect) onDeleteRect(rect.id);
+        return;
+      }
+
+      // "add" mode
       setStartPoint(coords);
       setCurrentPoint(coords);
       setDrawing(true);
     },
-    [pdfFile, getRelativeCoords]
+    [pdfFile, getRelativeCoords, cursorMode, findRectAtPoint, onSelectRect, onDeleteRect]
   );
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      if (!drawing) return;
+      if (!drawing || cursorMode !== "add") return;
       setCurrentPoint(getRelativeCoords(e));
     },
-    [drawing, getRelativeCoords]
+    [drawing, getRelativeCoords, cursorMode]
   );
 
   const handleMouseUp = useCallback(() => {
-    if (!drawing || !startPoint || !currentPoint) {
+    if (!drawing || !startPoint || !currentPoint || cursorMode !== "add") {
       setDrawing(false);
       return;
     }
@@ -90,7 +133,6 @@ export default function PdfViewer({
     const width = Math.abs(currentPoint.x - startPoint.x);
     const height = Math.abs(currentPoint.y - startPoint.y);
 
-    // Minimum size threshold
     if (width > 10 && height > 10) {
       onRectangleDrawn({
         x: Math.min(startPoint.x, currentPoint.x),
@@ -104,7 +146,7 @@ export default function PdfViewer({
     setDrawing(false);
     setStartPoint(null);
     setCurrentPoint(null);
-  }, [drawing, startPoint, currentPoint, currentPage, onRectangleDrawn]);
+  }, [drawing, startPoint, currentPoint, currentPage, onRectangleDrawn, cursorMode]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -124,6 +166,9 @@ export default function PdfViewer({
       : null;
 
   const pageRects = rectangles.filter((r) => r.pageNumber === currentPage);
+
+  const cursorClass =
+    cursorMode === "add" ? "cursor-crosshair" : cursorMode === "remove" ? "cursor-pointer" : "cursor-default";
 
   if (!pdfFile) {
     return (
@@ -155,6 +200,27 @@ export default function PdfViewer({
     <div className="flex-1 flex flex-col min-h-0">
       {/* Toolbar */}
       <div className="flex items-center gap-2 px-4 py-2 bg-toolbar text-toolbar-foreground border-b border-sidebar-border">
+        {/* Cursor mode toggle */}
+        <div className="flex items-center bg-sidebar-accent rounded-md p-0.5 gap-0.5">
+          {CURSOR_MODES.map(({ mode, icon: Icon, label }) => (
+            <button
+              key={mode}
+              onClick={() => onCursorModeChange(mode)}
+              title={label}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
+                cursorMode === mode
+                  ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                  : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="w-px h-5 bg-sidebar-border mx-2" />
+
         <button
           onClick={() => onPageChange(Math.max(1, currentPage - 1))}
           disabled={currentPage <= 1}
@@ -212,7 +278,8 @@ export default function PdfViewer({
       <div className="flex-1 overflow-auto bg-muted/30 flex justify-center p-4">
         <div
           ref={containerRef}
-          className="pdf-canvas-container relative inline-block shadow-lg"
+          className={`pdf-canvas-container relative inline-block shadow-lg ${cursorClass}`}
+          style={{ cursor: cursorMode === "add" ? "crosshair" : cursorMode === "remove" ? "pointer" : "default" }}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
@@ -253,10 +320,9 @@ export default function PdfViewer({
                 height: r.height,
                 borderColor: selectedRectId === r.id ? "hsl(var(--primary))" : undefined,
                 background: selectedRectId === r.id ? "hsl(var(--primary) / 0.15)" : undefined,
+                pointerEvents: cursorMode !== "add" ? "auto" : "none",
               }}
-            >
-              <span className="rect-label">{r.label}</span>
-            </div>
+            />
           ))}
         </div>
       </div>

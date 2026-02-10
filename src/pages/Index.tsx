@@ -50,6 +50,7 @@ const Index = () => {
       <PdfViewer
         rectangles={rectangles}
         onRectangleDrawn={handleRectangleDrawn}
+        onDeleteRect={handleDeleteRect}
         scale={scale}
         pdfFile={pdfFile}
         onFileLoad={setPdfFile}
@@ -58,6 +59,9 @@ const Index = () => {
         onPageChange={setCurrentPage}
         onTotalPagesChange={setTotalPages}
         selectedRectId={selectedRectId}
+        onSelectRect={setSelectedRectId}
+        cursorMode={cursorMode}
+        onCursorModeChange={setCursorMode}
       />
       <MeasurementSidebar
         rectangles={rectangles}
