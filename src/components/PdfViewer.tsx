@@ -1,7 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
-import "react-pdf/dist/esm/Page/AnnotationLayer.css";
-import "react-pdf/dist/esm/Page/TextLayer.css";
 import { DrawnRectangle, CursorMode } from "@/types/estimation";
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Upload, MousePointer, Plus, Minus } from "lucide-react";
 
