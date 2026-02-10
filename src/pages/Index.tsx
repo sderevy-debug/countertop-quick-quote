@@ -10,6 +10,7 @@ const Index = () => {
   const [totalPages, setTotalPages] = useState(0);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [selectedRectId, setSelectedRectId] = useState<string | null>(null);
+  const [cursorMode, setCursorMode] = useState<CursorMode>("add");
 
   const handleRectangleDrawn = useCallback(
     (rect: Omit<DrawnRectangle, "id" | "label" | "realWidth" | "realHeight" | "area">) => {
