@@ -1,3 +1,5 @@
+export type CursorMode = "select" | "add" | "remove";
+
 export interface DrawnRectangle {
   id: string;
   x: number;

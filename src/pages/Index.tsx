@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import PdfViewer from "@/components/PdfViewer";
 import MeasurementSidebar from "@/components/MeasurementSidebar";
-import { DrawnRectangle } from "@/types/estimation";
+import { DrawnRectangle, CursorMode } from "@/types/estimation";
 
 const Index = () => {
   const [rectangles, setRectangles] = useState<DrawnRectangle[]>([]);
@@ -10,6 +10,7 @@ const Index = () => {
   const [totalPages, setTotalPages] = useState(0);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [selectedRectId, setSelectedRectId] = useState<string | null>(null);
+  const [cursorMode, setCursorMode] = useState<CursorMode>("add");
 
   const handleRectangleDrawn = useCallback(
     (rect: Omit<DrawnRectangle, "id" | "label" | "realWidth" | "realHeight" | "area">) => {
@@ -49,6 +50,7 @@ const Index = () => {
       <PdfViewer
         rectangles={rectangles}
         onRectangleDrawn={handleRectangleDrawn}
+        onDeleteRect={handleDeleteRect}
         scale={scale}
         pdfFile={pdfFile}
         onFileLoad={setPdfFile}
@@ -57,6 +59,9 @@ const Index = () => {
         onPageChange={setCurrentPage}
         onTotalPagesChange={setTotalPages}
         selectedRectId={selectedRectId}
+        onSelectRect={setSelectedRectId}
+        cursorMode={cursorMode}
+        onCursorModeChange={setCursorMode}
       />
       <MeasurementSidebar
         rectangles={rectangles}
