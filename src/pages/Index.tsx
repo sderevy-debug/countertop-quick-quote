@@ -40,7 +40,12 @@ const Index = () => {
     });
   }, []);
 
-  // Convert a DrawnRectangle to a polygon-clipping Polygon
+  const handleScaleChange = useCallback((newScale: number) => {
+    setScale(newScale);
+    setRectangles((prev) => recalcRectangles(prev, newScale));
+  }, [recalcRectangles]);
+
+
   const shapeToClipPoly = useCallback((r: { shapeType: string; points?: Point[]; x: number; y: number; width: number; height: number }): ClipPolygon => {
     if (r.shapeType !== "rectangle" && r.points && r.points.length >= 3) {
       const ring: [number, number][] = r.points.map((p) => [p.x, p.y]);
