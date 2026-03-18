@@ -281,7 +281,7 @@ export default function PdfViewer({
       : null;
 
   const cursorStyle =
-    cursorMode === "add" ? "crosshair"
+    isDrawMode(cursorMode) ? "crosshair"
       : cursorMode === "remove" ? "pointer"
       : cursorMode === "calibrate" ? "crosshair"
       : "default";
