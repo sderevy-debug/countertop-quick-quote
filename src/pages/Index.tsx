@@ -2,43 +2,61 @@ import { useState, useCallback, useEffect } from "react";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import PdfViewer from "@/components/PdfViewer";
 import MeasurementSidebar from "@/components/MeasurementSidebar";
-import { DrawnRectangle, CursorMode } from "@/types/estimation";
+import { DrawnRectangle, CursorMode, CalibrationLine } from "@/types/estimation";
 import { Upload, Moon, Sun } from "lucide-react";
 
 const Index = () => {
   const [rectangles, setRectangles] = useState<DrawnRectangle[]>([]);
-  const [scale, setScale] = useState(10);
+  const [scale, setScale] = useState(0); // 0 means uncalibrated
   const [totalPages, setTotalPages] = useState(0);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [selectedRectId, setSelectedRectId] = useState<string | null>(null);
   const [cursorMode, setCursorMode] = useState<CursorMode>("add");
   const [darkMode, setDarkMode] = useState(true);
+  const [calibrationLine, setCalibrationLine] = useState<CalibrationLine | null>(null);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
   }, [darkMode]);
 
+  // Recalculate all rectangle real-world dimensions when scale changes
+  const recalcRectangles = useCallback((rects: DrawnRectangle[], newScale: number): DrawnRectangle[] => {
+    if (newScale <= 0) return rects;
+    return rects.map((r) => {
+      const realWidth = r.width / newScale;
+      const realHeight = r.height / newScale;
+      const area = (realWidth * realHeight) / 144;
+      return { ...r, realWidth, realHeight, area };
+    });
+  }, []);
+
+  const handleScaleChange = useCallback((newScale: number) => {
+    setScale(newScale);
+    setRectangles((prev) => recalcRectangles(prev, newScale));
+  }, [recalcRectangles]);
+
   const handleRectangleDrawn = useCallback(
     (rect: Omit<DrawnRectangle, "id" | "label" | "realWidth" | "realHeight" | "area">) => {
       const id = crypto.randomUUID();
-      const label = `R${rectangles.length + 1}`;
-      const realWidth = rect.width / scale;
-      const realHeight = rect.height / scale;
-      const area = (realWidth * realHeight) / 144;
+      setRectangles((prev) => {
+        const label = `R${prev.length + 1}`;
+        const realWidth = scale > 0 ? rect.width / scale : 0;
+        const realHeight = scale > 0 ? rect.height / scale : 0;
+        const area = (realWidth * realHeight) / 144;
 
-      const newRect: DrawnRectangle = {
-        ...rect,
-        id,
-        label,
-        realWidth,
-        realHeight,
-        area,
-      };
-
-      setRectangles((prev) => [...prev, newRect]);
+        const newRect: DrawnRectangle = {
+          ...rect,
+          id,
+          label,
+          realWidth,
+          realHeight,
+          area,
+        };
+        return [...prev, newRect];
+      });
       setSelectedRectId(id);
     },
-    [rectangles.length, scale]
+    [scale]
   );
 
   const handleDeleteRect = useCallback((id: string) => {
@@ -104,6 +122,7 @@ const Index = () => {
               onRectangleDrawn={handleRectangleDrawn}
               onDeleteRect={handleDeleteRect}
               scale={scale}
+              onScaleChange={handleScaleChange}
               pdfFile={pdfFile}
               onFileLoad={setPdfFile}
               totalPages={totalPages}
@@ -112,6 +131,8 @@ const Index = () => {
               onSelectRect={setSelectedRectId}
               cursorMode={cursorMode}
               onCursorModeChange={setCursorMode}
+              calibrationLine={calibrationLine}
+              onCalibrationLineDrawn={setCalibrationLine}
             />
           </ResizablePanel>
           <ResizableHandle withHandle />
@@ -119,11 +140,11 @@ const Index = () => {
             <MeasurementSidebar
               rectangles={rectangles}
               scale={scale}
-              onScaleChange={setScale}
               onDeleteRect={handleDeleteRect}
               onClearAll={handleClearAll}
               selectedRectId={selectedRectId}
               onSelectRect={setSelectedRectId}
+              onRequestCalibrate={() => setCursorMode("calibrate")}
             />
           </ResizablePanel>
         </ResizablePanelGroup>
