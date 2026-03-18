@@ -318,9 +318,9 @@ export default function PdfViewer({
     <div className="h-full flex flex-col min-h-0 min-w-0">
       {/* Toolbar */}
       <div className="flex items-center gap-2 px-4 py-2 bg-toolbar text-toolbar-foreground border-b border-sidebar-border shrink-0">
-        {/* Cursor mode toggle */}
+        {/* Tool modes */}
         <div className="flex items-center bg-sidebar-accent rounded-md p-0.5 gap-0.5">
-          {CURSOR_MODES.map(({ mode, icon: Icon, label }) => (
+          {TOOL_MODES.map(({ mode, icon: Icon, label }) => (
             <button
               key={mode}
               onClick={() => onCursorModeChange(mode)}
@@ -336,6 +336,40 @@ export default function PdfViewer({
             </button>
           ))}
         </div>
+
+        <div className="w-px h-5 bg-sidebar-border mx-1" />
+
+        {/* Shape modes */}
+        <div className="flex items-center bg-sidebar-accent rounded-md p-0.5 gap-0.5">
+          {SHAPE_MODES.map(({ mode, icon: Icon, label }) => (
+            <button
+              key={mode}
+              onClick={() => onCursorModeChange(mode)}
+              title={label}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
+                cursorMode === mode
+                  ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                  : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="w-px h-5 bg-sidebar-border mx-1" />
+
+        {/* Combine Shapes checkbox */}
+        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={combineShapes}
+            onChange={(e) => onCombineShapesChange(e.target.checked)}
+            className="w-3.5 h-3.5 rounded border-sidebar-border accent-sidebar-primary cursor-pointer"
+          />
+          <span className="text-xs text-sidebar-foreground/70">Combine Shapes</span>
+        </label>
 
         <div className="w-px h-5 bg-sidebar-border mx-2" />
 
