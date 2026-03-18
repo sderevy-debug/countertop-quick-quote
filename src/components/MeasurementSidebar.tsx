@@ -4,23 +4,24 @@ import { Trash2, Ruler } from "lucide-react";
 interface MeasurementSidebarProps {
   rectangles: DrawnRectangle[];
   scale: number;
-  onScaleChange: (scale: number) => void;
   onDeleteRect: (id: string) => void;
   onClearAll: () => void;
   selectedRectId: string | null;
   onSelectRect: (id: string | null) => void;
+  onRequestCalibrate: () => void;
 }
 
 export default function MeasurementSidebar({
   rectangles,
   scale,
-  onScaleChange,
   onDeleteRect,
   onClearAll,
   selectedRectId,
   onSelectRect,
+  onRequestCalibrate,
 }: MeasurementSidebarProps) {
   const totalArea = rectangles.reduce((sum, r) => sum + r.area, 0);
+  const isCalibrated = scale > 0;
 
   return (
     <div className="w-full h-full flex flex-col bg-sidebar text-sidebar-foreground border-l border-sidebar-border overflow-hidden">
@@ -31,30 +32,45 @@ export default function MeasurementSidebar({
         </h2>
       </div>
 
-      {/* Scale setting */}
+      {/* Scale status */}
       <div className="px-4 py-3 border-b border-sidebar-border">
         <div className="flex items-center gap-2 mb-2">
           <Ruler className="w-3.5 h-3.5 text-sidebar-primary" />
-          <label className="text-xs font-medium text-sidebar-foreground/70 uppercase tracking-wide">
-            Scale (px per inch)
-          </label>
+          <span className="text-xs font-medium text-sidebar-foreground/70 uppercase tracking-wide">
+            Scale
+          </span>
         </div>
-        <input
-          type="number"
-          value={scale}
-          onChange={(e) => onScaleChange(Number(e.target.value) || 1)}
-          min={1}
-          className="w-full px-3 py-1.5 text-sm font-mono bg-sidebar-accent border border-sidebar-border rounded text-sidebar-foreground focus:outline-none focus:ring-1 focus:ring-sidebar-primary"
-        />
-        <p className="text-[10px] text-sidebar-foreground/40 mt-1">
-          Adjust to match your PDF's actual scale
-        </p>
+        {isCalibrated ? (
+          <div>
+            <p className="text-xs text-sidebar-foreground/60 font-mono">
+              {scale.toFixed(2)} px/in
+            </p>
+            <button
+              onClick={onRequestCalibrate}
+              className="mt-2 w-full text-xs py-1.5 rounded bg-sidebar-accent hover:bg-sidebar-muted text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors"
+            >
+              Recalibrate
+            </button>
+          </div>
+        ) : (
+          <div>
+            <p className="text-[10px] text-sidebar-foreground/40 mb-2">
+              Draw a reference line on the PDF to set the scale
+            </p>
+            <button
+              onClick={onRequestCalibrate}
+              className="w-full text-xs py-2 rounded bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90 font-medium transition-colors"
+            >
+              Calibrate Scale
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Table */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto min-h-0">
         <table className="w-full text-xs">
-          <thead>
+          <thead className="sticky top-0 bg-sidebar">
             <tr className="border-b border-sidebar-border text-sidebar-foreground/60">
               <th className="text-left px-4 py-2 font-medium">#</th>
               <th className="text-right px-2 py-2 font-medium">W (in)</th>
@@ -67,11 +83,13 @@ export default function MeasurementSidebar({
             {rectangles.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-sidebar-foreground/40 text-xs">
-                  Draw rectangles on the PDF to measure areas
+                  {isCalibrated
+                    ? "Draw rectangles on the PDF to measure areas"
+                    : "Calibrate the scale first, then draw rectangles"}
                 </td>
               </tr>
             ) : (
-              rectangles.map((r, i) => (
+              rectangles.map((r) => (
                 <tr
                   key={r.id}
                   className={`border-b border-sidebar-border/50 cursor-pointer transition-colors ${
@@ -85,13 +103,13 @@ export default function MeasurementSidebar({
                     {r.label}
                   </td>
                   <td className="text-right px-2 py-2 font-mono">
-                    {r.realWidth.toFixed(1)}
+                    {isCalibrated ? r.realWidth.toFixed(1) : "—"}
                   </td>
                   <td className="text-right px-2 py-2 font-mono">
-                    {r.realHeight.toFixed(1)}
+                    {isCalibrated ? r.realHeight.toFixed(1) : "—"}
                   </td>
                   <td className="text-right px-2 py-2 font-mono font-medium">
-                    {r.area.toFixed(2)}
+                    {isCalibrated ? r.area.toFixed(2) : "—"}
                   </td>
                   <td className="px-2 py-2">
                     <button
@@ -112,13 +130,14 @@ export default function MeasurementSidebar({
       </div>
 
       {/* Footer totals */}
-      <div className="border-t border-sidebar-border px-4 py-3">
+      <div className="border-t border-sidebar-border px-4 py-3 shrink-0">
         <div className="flex items-center justify-between">
           <span className="text-xs font-medium text-sidebar-foreground/60 uppercase tracking-wide">
             Total Area
           </span>
           <span className="text-lg font-mono font-bold text-sidebar-primary">
-            {totalArea.toFixed(2)} <span className="text-xs font-normal text-sidebar-foreground/50">ft²</span>
+            {isCalibrated ? totalArea.toFixed(2) : "—"}{" "}
+            <span className="text-xs font-normal text-sidebar-foreground/50">ft²</span>
           </span>
         </div>
         {rectangles.length > 0 && (
