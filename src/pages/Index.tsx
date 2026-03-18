@@ -7,7 +7,6 @@ import { DrawnRectangle, CursorMode } from "@/types/estimation";
 const Index = () => {
   const [rectangles, setRectangles] = useState<DrawnRectangle[]>([]);
   const [scale, setScale] = useState(10); // px per inch
-  const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [selectedRectId, setSelectedRectId] = useState<string | null>(null);
@@ -56,9 +55,7 @@ const Index = () => {
           scale={scale}
           pdfFile={pdfFile}
           onFileLoad={setPdfFile}
-          currentPage={currentPage}
           totalPages={totalPages}
-          onPageChange={setCurrentPage}
           onTotalPagesChange={setTotalPages}
           selectedRectId={selectedRectId}
           onSelectRect={setSelectedRectId}
