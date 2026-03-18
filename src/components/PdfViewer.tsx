@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
-import { DrawnRectangle, CursorMode, CalibrationLine } from "@/types/estimation";
+import { DrawnRectangle, CursorMode, CalibrationLine, Point, boundingBox, pointInPolygon } from "@/types/estimation";
 import { ZoomIn, ZoomOut, Upload, MousePointer, Minus, Maximize2, Square, Triangle, Hexagon } from "lucide-react";
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -37,6 +37,7 @@ const SHAPE_MODES: { mode: CursorMode; icon: typeof Square; label: string }[] = 
 ];
 
 const isDrawMode = (mode: CursorMode) => mode === "add" || mode === "add_triangle" || mode === "add_polygon";
+const isPointMode = (mode: CursorMode) => mode === "add_triangle" || mode === "add_polygon";
 
 export default function PdfViewer({
   rectangles,
@@ -67,6 +68,11 @@ export default function PdfViewer({
   const [pdfPageWidth, setPdfPageWidth] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Polygon/triangle point-click drawing state
+  const [polyPoints, setPolyPoints] = useState<Point[]>([]);
+  const [polyPage, setPolyPage] = useState<number | null>(null);
+  const [polyMousePos, setPolyMousePos] = useState<Point | null>(null);
+
   // Calibration line drawing state
   const [calStartPoint, setCalStartPoint] = useState<{ x: number; y: number; page: number } | null>(null);
   const [calCurrentPoint, setCalCurrentPoint] = useState<{ x: number; y: number } | null>(null);
@@ -78,6 +84,13 @@ export default function PdfViewer({
   const [calUnit, setCalUnit] = useState<"ft" | "in">("ft");
   const [pendingCalLine, setPendingCalLine] = useState<CalibrationLine | null>(null);
   const calInputRef = useRef<HTMLInputElement>(null);
+
+  // Reset poly state when cursor mode changes
+  useEffect(() => {
+    setPolyPoints([]);
+    setPolyPage(null);
+    setPolyMousePos(null);
+  }, [cursorMode]);
 
   const handleFitWidth = useCallback(() => {
     if (!scrollAreaRef.current || !pdfPageWidth) return;
@@ -116,22 +129,46 @@ export default function PdfViewer({
     []
   );
 
-  const findRectAtPoint = useCallback(
+  const findShapeAtPoint = useCallback(
     (pageNumber: number, x: number, y: number) => {
-      // x, y are in zoomed pixels; rects are stored at zoom=1
       const nx = x / zoom;
       const ny = y / zoom;
       const pageRects = rectangles.filter((r) => r.pageNumber === pageNumber);
       for (let i = pageRects.length - 1; i >= 0; i--) {
         const r = pageRects[i];
-        if (nx >= r.x && nx <= r.x + r.width && ny >= r.y && ny <= r.y + r.height) {
-          return r;
+        if (r.shapeType === "rectangle") {
+          if (nx >= r.x && nx <= r.x + r.width && ny >= r.y && ny <= r.y + r.height) {
+            return r;
+          }
+        } else if (r.points && r.points.length >= 3) {
+          if (pointInPolygon(nx, ny, r.points)) {
+            return r;
+          }
         }
       }
       return null;
     },
     [rectangles, zoom]
   );
+
+  const finishPolygon = useCallback((points: Point[], page: number) => {
+    if (points.length < 3) return;
+    // Normalize to zoom=1
+    const normalizedPoints = points.map((p) => ({ x: p.x / zoom, y: p.y / zoom }));
+    const bb = boundingBox(normalizedPoints);
+    onRectangleDrawn({
+      x: bb.x,
+      y: bb.y,
+      width: bb.width,
+      height: bb.height,
+      pageNumber: page,
+      shapeType: cursorMode === "add_triangle" ? "triangle" : "polygon",
+      points: normalizedPoints,
+    });
+    setPolyPoints([]);
+    setPolyPage(null);
+    setPolyMousePos(null);
+  }, [zoom, onRectangleDrawn, cursorMode]);
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -140,14 +177,14 @@ export default function PdfViewer({
       if (!info) return;
 
       if (cursorMode === "select") {
-        const rect = findRectAtPoint(info.pageNumber, info.x, info.y);
-        onSelectRect(rect ? rect.id : null);
+        const shape = findShapeAtPoint(info.pageNumber, info.x, info.y);
+        onSelectRect(shape ? shape.id : null);
         return;
       }
 
       if (cursorMode === "remove") {
-        const rect = findRectAtPoint(info.pageNumber, info.x, info.y);
-        if (rect) onDeleteRect(rect.id);
+        const shape = findShapeAtPoint(info.pageNumber, info.x, info.y);
+        if (shape) onDeleteRect(shape.id);
         return;
       }
 
@@ -158,17 +195,52 @@ export default function PdfViewer({
         return;
       }
 
-      // drawing mode (add, add_triangle, add_polygon)
+      // Triangle/Polygon: click to place points
+      if (isPointMode(cursorMode)) {
+        const clickPoint: Point = { x: info.x, y: info.y };
+
+        if (polyPage !== null && polyPage !== info.pageNumber) return; // must stay on same page
+
+        if (polyPoints.length === 0) {
+          setPolyPage(info.pageNumber);
+          setPolyPoints([clickPoint]);
+          return;
+        }
+
+        // Check if clicking near first point to close polygon
+        if (polyPoints.length >= 3) {
+          const first = polyPoints[0];
+          const dist = Math.sqrt((clickPoint.x - first.x) ** 2 + (clickPoint.y - first.y) ** 2);
+          if (dist < 15) {
+            finishPolygon(polyPoints, polyPage!);
+            return;
+          }
+        }
+
+        const newPoints = [...polyPoints, clickPoint];
+
+        // Triangle: auto-close after 3 points
+        if (cursorMode === "add_triangle" && newPoints.length === 3) {
+          finishPolygon(newPoints, polyPage ?? info.pageNumber);
+          return;
+        }
+
+        setPolyPoints(newPoints);
+        return;
+      }
+
+      // Rectangle: drag to draw
       setDrawingPage(info.pageNumber);
       setStartPoint({ x: info.x, y: info.y });
       setCurrentPoint({ x: info.x, y: info.y });
       setDrawing(true);
     },
-    [pdfFile, getPageAndCoords, cursorMode, findRectAtPoint, onSelectRect, onDeleteRect]
+    [pdfFile, getPageAndCoords, cursorMode, findShapeAtPoint, onSelectRect, onDeleteRect, polyPoints, polyPage, finishPolygon]
   );
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
+      // Calibration
       if (cursorMode === "calibrate" && calDrawing && calStartPoint) {
         const target = e.target as HTMLElement;
         const pageWrapper = target.closest("[data-page-number]") as HTMLElement;
@@ -181,7 +253,21 @@ export default function PdfViewer({
         return;
       }
 
-      if (!drawing || !isDrawMode(cursorMode) || drawingPage === null) return;
+      // Polygon/triangle preview line
+      if (isPointMode(cursorMode) && polyPoints.length > 0 && polyPage !== null) {
+        const target = e.target as HTMLElement;
+        const pageWrapper = target.closest("[data-page-number]") as HTMLElement;
+        if (!pageWrapper || parseInt(pageWrapper.dataset.pageNumber!, 10) !== polyPage) return;
+        const rect = pageWrapper.getBoundingClientRect();
+        setPolyMousePos({
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top,
+        });
+        return;
+      }
+
+      // Rectangle drag
+      if (!drawing || cursorMode !== "add" || drawingPage === null) return;
       const target = e.target as HTMLElement;
       const pageWrapper = target.closest("[data-page-number]") as HTMLElement;
       if (!pageWrapper || parseInt(pageWrapper.dataset.pageNumber!, 10) !== drawingPage) return;
@@ -191,7 +277,7 @@ export default function PdfViewer({
         y: e.clientY - rect.top,
       });
     },
-    [drawing, cursorMode, drawingPage, calDrawing, calStartPoint]
+    [drawing, cursorMode, drawingPage, calDrawing, calStartPoint, polyPoints, polyPage]
   );
 
   const handleMouseUp = useCallback(() => {
@@ -221,7 +307,10 @@ export default function PdfViewer({
       return;
     }
 
-    if (!drawing || !startPoint || !currentPoint || !isDrawMode(cursorMode) || drawingPage === null) {
+    // Point modes don't use mouseUp
+    if (isPointMode(cursorMode)) return;
+
+    if (!drawing || !startPoint || !currentPoint || cursorMode !== "add" || drawingPage === null) {
       setDrawing(false);
       setDrawingPage(null);
       return;
@@ -240,6 +329,7 @@ export default function PdfViewer({
         width,
         height,
         pageNumber: drawingPage,
+        shapeType: "rectangle",
       });
     }
 
@@ -248,6 +338,29 @@ export default function PdfViewer({
     setCurrentPoint(null);
     setDrawingPage(null);
   }, [drawing, startPoint, currentPoint, drawingPage, onRectangleDrawn, cursorMode, zoom, calDrawing, calStartPoint, calCurrentPoint]);
+
+  // Double-click to close polygon
+  const handleDoubleClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (cursorMode !== "add_polygon" || polyPoints.length < 3 || polyPage === null) return;
+      e.preventDefault();
+      finishPolygon(polyPoints, polyPage);
+    },
+    [cursorMode, polyPoints, polyPage, finishPolygon]
+  );
+
+  // Escape to cancel polygon drawing
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isPointMode(cursorMode) && polyPoints.length > 0) {
+        setPolyPoints([]);
+        setPolyPage(null);
+        setPolyMousePos(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [cursorMode, polyPoints]);
 
   const handleCalibrationSubmit = useCallback(() => {
     if (!pendingCalLine || !calLengthValue) return;
@@ -273,7 +386,7 @@ export default function PdfViewer({
   };
 
   const drawingRect =
-    drawing && startPoint && currentPoint
+    drawing && startPoint && currentPoint && cursorMode === "add"
       ? {
           left: Math.min(startPoint.x, currentPoint.x),
           top: Math.min(startPoint.y, currentPoint.y),
@@ -289,6 +402,53 @@ export default function PdfViewer({
       : "default";
 
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
+
+  // Helper to render a shape
+  const renderShape = (r: DrawnRectangle, isSelected: boolean) => {
+    if (r.shapeType === "rectangle") {
+      return (
+        <div
+          key={r.id}
+          className="completed-rect"
+          style={{
+            left: r.x * zoom,
+            top: r.y * zoom,
+            width: r.width * zoom,
+            height: r.height * zoom,
+            borderColor: isSelected ? "hsl(var(--primary))" : undefined,
+            background: isSelected ? "hsl(var(--primary) / 0.15)" : undefined,
+            pointerEvents: !isDrawMode(cursorMode) && cursorMode !== "calibrate" ? "auto" : "none",
+          }}
+        />
+      );
+    }
+
+    // Triangle or polygon
+    if (!r.points || r.points.length < 3) return null;
+    const pointsStr = r.points.map((p) => `${p.x * zoom},${p.y * zoom}`).join(" ");
+    const strokeColor = isSelected ? "hsl(var(--primary))" : "hsl(var(--accent))";
+    const fillColor = isSelected ? "hsl(var(--primary) / 0.15)" : "hsl(var(--accent) / 0.1)";
+
+    return (
+      <svg
+        key={r.id}
+        className="absolute inset-0 w-full h-full"
+        style={{
+          zIndex: 9,
+          overflow: "visible",
+          pointerEvents: !isDrawMode(cursorMode) && cursorMode !== "calibrate" ? "auto" : "none",
+        }}
+      >
+        <polygon
+          points={pointsStr}
+          stroke={strokeColor}
+          strokeWidth={2}
+          fill={fillColor}
+          className="transition-colors"
+        />
+      </svg>
+    );
+  };
 
   if (!pdfFile) {
     return (
@@ -315,6 +475,18 @@ export default function PdfViewer({
       </div>
     );
   }
+
+  // Hint banner text
+  const hintText =
+    cursorMode === "calibrate" && !showCalInput
+      ? "Draw a line along a known dimension on the blueprint"
+      : cursorMode === "add_triangle" && polyPoints.length < 3
+      ? `Click to place point ${polyPoints.length + 1} of 3`
+      : cursorMode === "add_polygon" && polyPoints.length < 3
+      ? `Click to place points (${polyPoints.length} placed, need at least 3). Double-click or click first point to close.`
+      : cursorMode === "add_polygon" && polyPoints.length >= 3
+      ? `${polyPoints.length} points placed. Double-click or click first point to close. Press Esc to cancel.`
+      : null;
 
   return (
     <div className="h-full flex flex-col min-h-0 min-w-0">
@@ -421,20 +593,21 @@ export default function PdfViewer({
         />
       </div>
 
-      {/* Calibration hint banner */}
-      {cursorMode === "calibrate" && !showCalInput && (
+      {/* Hint banner */}
+      {hintText && (
         <div className="px-4 py-2 bg-warning/20 text-warning text-xs font-medium text-center shrink-0 border-b border-sidebar-border">
-          Draw a line along a known dimension on the blueprint
+          {hintText}
         </div>
       )}
 
-      {/* PDF Area - all pages continuous */}
+      {/* PDF Area */}
       <div
         ref={scrollAreaRef}
         className="flex-1 overflow-auto bg-muted/30 p-4 min-h-0 relative"
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        onMouseLeave={() => { if (cursorMode === "add") handleMouseUp(); }}
+        onDoubleClick={handleDoubleClick}
         style={{ cursor: cursorStyle }}
       >
         <Document
@@ -461,10 +634,10 @@ export default function PdfViewer({
                     }}
                   />
 
-                  {/* Drawing overlay for this page */}
+                  {/* Drawing overlay */}
                   <div className="absolute inset-0 z-10" />
 
-                  {/* Active drawing rectangle */}
+                  {/* Active rectangle drawing */}
                   {drawingRect && drawingPage === pageNum && (
                     <div
                       className="drawing-rect"
@@ -477,55 +650,96 @@ export default function PdfViewer({
                     />
                   )}
 
-                  {/* Active calibration line */}
+                  {/* Active polygon/triangle drawing */}
+                  {polyPoints.length > 0 && polyPage === pageNum && (
+                    <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 12, overflow: "visible" }}>
+                      {/* Completed edges */}
+                      {polyPoints.map((p, i) => {
+                        if (i === 0) return null;
+                        const prev = polyPoints[i - 1];
+                        return (
+                          <line
+                            key={`edge-${i}`}
+                            x1={prev.x} y1={prev.y}
+                            x2={p.x} y2={p.y}
+                            stroke="hsl(var(--accent))"
+                            strokeWidth={2}
+                          />
+                        );
+                      })}
+                      {/* Preview line to cursor */}
+                      {polyMousePos && polyPoints.length > 0 && (
+                        <line
+                          x1={polyPoints[polyPoints.length - 1].x}
+                          y1={polyPoints[polyPoints.length - 1].y}
+                          x2={polyMousePos.x}
+                          y2={polyMousePos.y}
+                          stroke="hsl(var(--accent))"
+                          strokeWidth={2}
+                          strokeDasharray="6 3"
+                        />
+                      )}
+                      {/* Close line preview (to first point) */}
+                      {polyMousePos && polyPoints.length >= 3 && (
+                        <line
+                          x1={polyMousePos.x}
+                          y1={polyMousePos.y}
+                          x2={polyPoints[0].x}
+                          y2={polyPoints[0].y}
+                          stroke="hsl(var(--accent) / 0.3)"
+                          strokeWidth={1}
+                          strokeDasharray="4 4"
+                        />
+                      )}
+                      {/* Vertex dots */}
+                      {polyPoints.map((p, i) => (
+                        <circle
+                          key={`dot-${i}`}
+                          cx={p.x} cy={p.y} r={4}
+                          fill={i === 0 && polyPoints.length >= 3 ? "hsl(var(--success))" : "hsl(var(--accent))"}
+                          stroke="hsl(var(--background))"
+                          strokeWidth={1.5}
+                        />
+                      ))}
+                      {/* Fill preview */}
+                      {polyPoints.length >= 3 && (
+                        <polygon
+                          points={polyPoints.map((p) => `${p.x},${p.y}`).join(" ")}
+                          fill="hsl(var(--accent) / 0.08)"
+                          stroke="none"
+                        />
+                      )}
+                    </svg>
+                  )}
+
+                  {/* Calibration line drawing */}
                   {calDrawing && calStartPoint && calCurrentPoint && calStartPoint.page === pageNum && (
                     <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 12, overflow: "visible" }}>
                       <line
-                        x1={calStartPoint.x}
-                        y1={calStartPoint.y}
-                        x2={calCurrentPoint.x}
-                        y2={calCurrentPoint.y}
-                        stroke="hsl(var(--warning))"
-                        strokeWidth={2}
-                        strokeDasharray="6 3"
+                        x1={calStartPoint.x} y1={calStartPoint.y}
+                        x2={calCurrentPoint.x} y2={calCurrentPoint.y}
+                        stroke="hsl(var(--warning))" strokeWidth={2} strokeDasharray="6 3"
                       />
                       <circle cx={calStartPoint.x} cy={calStartPoint.y} r={4} fill="hsl(var(--warning))" />
                       <circle cx={calCurrentPoint.x} cy={calCurrentPoint.y} r={4} fill="hsl(var(--warning))" />
                     </svg>
                   )}
 
-                  {/* Pending calibration line (during input) */}
+                  {/* Pending calibration line */}
                   {pendingCalLine && pendingCalLine.pageNumber === pageNum && showCalInput && (
                     <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 12, overflow: "visible" }}>
                       <line
-                        x1={pendingCalLine.startX * zoom}
-                        y1={pendingCalLine.startY * zoom}
-                        x2={pendingCalLine.endX * zoom}
-                        y2={pendingCalLine.endY * zoom}
-                        stroke="hsl(var(--warning))"
-                        strokeWidth={2.5}
+                        x1={pendingCalLine.startX * zoom} y1={pendingCalLine.startY * zoom}
+                        x2={pendingCalLine.endX * zoom} y2={pendingCalLine.endY * zoom}
+                        stroke="hsl(var(--warning))" strokeWidth={2.5}
                       />
                       <circle cx={pendingCalLine.startX * zoom} cy={pendingCalLine.startY * zoom} r={4} fill="hsl(var(--warning))" />
                       <circle cx={pendingCalLine.endX * zoom} cy={pendingCalLine.endY * zoom} r={4} fill="hsl(var(--warning))" />
                     </svg>
                   )}
 
-                  {/* Completed rectangles for this page (stored at zoom=1, rendered at current zoom) */}
-                  {pageRects.map((r) => (
-                    <div
-                      key={r.id}
-                      className="completed-rect"
-                      style={{
-                        left: r.x * zoom,
-                        top: r.y * zoom,
-                        width: r.width * zoom,
-                        height: r.height * zoom,
-                        borderColor: selectedRectId === r.id ? "hsl(var(--primary))" : undefined,
-                        background: selectedRectId === r.id ? "hsl(var(--primary) / 0.15)" : undefined,
-                        pointerEvents: !isDrawMode(cursorMode) && cursorMode !== "calibrate" ? "auto" : "none",
-                      }}
-                    />
-                  ))}
+                  {/* Completed shapes */}
+                  {pageRects.map((r) => renderShape(r, selectedRectId === r.id))}
 
                   {/* Page number label */}
                   <div className="absolute bottom-2 right-2 text-[10px] font-mono bg-foreground/70 text-background px-1.5 py-0.5 rounded z-20">
@@ -567,9 +781,7 @@ export default function PdfViewer({
                   <button
                     onClick={() => setCalUnit("ft")}
                     className={`px-3 py-2 text-xs font-medium transition-colors ${
-                      calUnit === "ft"
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:text-foreground"
+                      calUnit === "ft" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
                     ft
@@ -577,9 +789,7 @@ export default function PdfViewer({
                   <button
                     onClick={() => setCalUnit("in")}
                     className={`px-3 py-2 text-xs font-medium transition-colors ${
-                      calUnit === "in"
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:text-foreground"
+                      calUnit === "in" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
                     in
@@ -588,10 +798,7 @@ export default function PdfViewer({
               </div>
               <div className="flex gap-2">
                 <button
-                  onClick={() => {
-                    setShowCalInput(false);
-                    setPendingCalLine(null);
-                  }}
+                  onClick={() => { setShowCalInput(false); setPendingCalLine(null); }}
                   className="flex-1 px-3 py-2 text-xs font-medium rounded border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                 >
                   Cancel
