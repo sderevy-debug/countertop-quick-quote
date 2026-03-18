@@ -346,6 +346,7 @@ export default function PdfViewer({
             />
           ))}
         </div>
+        </div>
       </div>
     </div>
   );
