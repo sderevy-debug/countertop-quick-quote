@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import PdfViewer from "@/components/PdfViewer";
 import MeasurementSidebar from "@/components/MeasurementSidebar";
 import { DrawnRectangle, CursorMode } from "@/types/estimation";
