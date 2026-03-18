@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { DrawnRectangle, CursorMode } from "@/types/estimation";
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Upload, MousePointer, Plus, Minus, Maximize2 } from "lucide-react";
+import { ZoomIn, ZoomOut, Upload, MousePointer, Plus, Minus, Maximize2 } from "lucide-react";
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
@@ -12,9 +12,7 @@ interface PdfViewerProps {
   scale: number;
   pdfFile: File | null;
   onFileLoad: (file: File) => void;
-  currentPage: number;
   totalPages: number;
-  onPageChange: (page: number) => void;
   onTotalPagesChange: (total: number) => void;
   selectedRectId: string | null;
   onSelectRect: (id: string | null) => void;
@@ -34,18 +32,16 @@ export default function PdfViewer({
   onDeleteRect,
   pdfFile,
   onFileLoad,
-  currentPage,
   totalPages,
-  onPageChange,
   onTotalPagesChange,
   selectedRectId,
   onSelectRect,
   cursorMode,
   onCursorModeChange,
 }: PdfViewerProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const [drawing, setDrawing] = useState(false);
+  const [drawingPage, setDrawingPage] = useState<number | null>(null);
   const [startPoint, setStartPoint] = useState<{ x: number; y: number } | null>(null);
   const [currentPoint, setCurrentPoint] = useState<{ x: number; y: number } | null>(null);
   const [zoom, setZoom] = useState(1.2);
@@ -55,7 +51,7 @@ export default function PdfViewer({
 
   const handleFitWidth = useCallback(() => {
     if (!scrollAreaRef.current || !pdfPageWidth) return;
-    const availableWidth = scrollAreaRef.current.clientWidth - 32; // subtract padding
+    const availableWidth = scrollAreaRef.current.clientWidth - 32;
     const newZoom = availableWidth / pdfPageWidth;
     setZoom(Math.max(0.5, Math.min(3, newZoom)));
   }, [pdfPageWidth]);
@@ -68,14 +64,15 @@ export default function PdfViewer({
     }
   }, [pdfFile]);
 
-  const getRelativeCoords = useCallback(
-    (e: React.MouseEvent) => {
-      const container = containerRef.current;
-      if (!container) return { x: 0, y: 0 };
-      const pageEl = container.querySelector(".react-pdf__Page") as HTMLElement;
-      if (!pageEl) return { x: 0, y: 0 };
-      const rect = pageEl.getBoundingClientRect();
+  const getPageAndCoords = useCallback(
+    (e: React.MouseEvent): { pageNumber: number; x: number; y: number } | null => {
+      const target = e.target as HTMLElement;
+      const pageWrapper = target.closest("[data-page-number]") as HTMLElement;
+      if (!pageWrapper) return null;
+      const pageNumber = parseInt(pageWrapper.dataset.pageNumber!, 10);
+      const rect = pageWrapper.getBoundingClientRect();
       return {
+        pageNumber,
         x: e.clientX - rect.left,
         y: e.clientY - rect.top,
       };
@@ -84,9 +81,8 @@ export default function PdfViewer({
   );
 
   const findRectAtPoint = useCallback(
-    (x: number, y: number) => {
-      const pageRects = rectangles.filter((r) => r.pageNumber === currentPage);
-      // Find topmost (last drawn) rect containing the point
+    (pageNumber: number, x: number, y: number) => {
+      const pageRects = rectangles.filter((r) => r.pageNumber === pageNumber);
       for (let i = pageRects.length - 1; i >= 0; i--) {
         const r = pageRects[i];
         if (x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height) {
@@ -95,45 +91,55 @@ export default function PdfViewer({
       }
       return null;
     },
-    [rectangles, currentPage]
+    [rectangles]
   );
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       if (!pdfFile) return;
-      const coords = getRelativeCoords(e);
+      const info = getPageAndCoords(e);
+      if (!info) return;
 
       if (cursorMode === "select") {
-        const rect = findRectAtPoint(coords.x, coords.y);
+        const rect = findRectAtPoint(info.pageNumber, info.x, info.y);
         onSelectRect(rect ? rect.id : null);
         return;
       }
 
       if (cursorMode === "remove") {
-        const rect = findRectAtPoint(coords.x, coords.y);
+        const rect = findRectAtPoint(info.pageNumber, info.x, info.y);
         if (rect) onDeleteRect(rect.id);
         return;
       }
 
       // "add" mode
-      setStartPoint(coords);
-      setCurrentPoint(coords);
+      setDrawingPage(info.pageNumber);
+      setStartPoint({ x: info.x, y: info.y });
+      setCurrentPoint({ x: info.x, y: info.y });
       setDrawing(true);
     },
-    [pdfFile, getRelativeCoords, cursorMode, findRectAtPoint, onSelectRect, onDeleteRect]
+    [pdfFile, getPageAndCoords, cursorMode, findRectAtPoint, onSelectRect, onDeleteRect]
   );
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      if (!drawing || cursorMode !== "add") return;
-      setCurrentPoint(getRelativeCoords(e));
+      if (!drawing || cursorMode !== "add" || drawingPage === null) return;
+      const target = e.target as HTMLElement;
+      const pageWrapper = target.closest("[data-page-number]") as HTMLElement;
+      if (!pageWrapper || parseInt(pageWrapper.dataset.pageNumber!, 10) !== drawingPage) return;
+      const rect = pageWrapper.getBoundingClientRect();
+      setCurrentPoint({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      });
     },
-    [drawing, getRelativeCoords, cursorMode]
+    [drawing, cursorMode, drawingPage]
   );
 
   const handleMouseUp = useCallback(() => {
-    if (!drawing || !startPoint || !currentPoint || cursorMode !== "add") {
+    if (!drawing || !startPoint || !currentPoint || cursorMode !== "add" || drawingPage === null) {
       setDrawing(false);
+      setDrawingPage(null);
       return;
     }
 
@@ -146,14 +152,15 @@ export default function PdfViewer({
         y: Math.min(startPoint.y, currentPoint.y),
         width,
         height,
-        pageNumber: currentPage,
+        pageNumber: drawingPage,
       });
     }
 
     setDrawing(false);
     setStartPoint(null);
     setCurrentPoint(null);
-  }, [drawing, startPoint, currentPoint, currentPage, onRectangleDrawn, cursorMode]);
+    setDrawingPage(null);
+  }, [drawing, startPoint, currentPoint, drawingPage, onRectangleDrawn, cursorMode]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -172,14 +179,14 @@ export default function PdfViewer({
         }
       : null;
 
-  const pageRects = rectangles.filter((r) => r.pageNumber === currentPage);
+  const cursorStyle =
+    cursorMode === "add" ? "crosshair" : cursorMode === "remove" ? "pointer" : "default";
 
-  const cursorClass =
-    cursorMode === "add" ? "cursor-crosshair" : cursorMode === "remove" ? "cursor-pointer" : "cursor-default";
+  const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
 
   if (!pdfFile) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-muted/50">
+      <div className="h-full flex items-center justify-center bg-muted/50">
         <div
           className="flex flex-col items-center gap-4 p-12 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-primary/50 transition-colors"
           onClick={() => fileInputRef.current?.click()}
@@ -206,7 +213,7 @@ export default function PdfViewer({
   return (
     <div className="h-full flex flex-col min-h-0 min-w-0">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-4 py-2 bg-toolbar text-toolbar-foreground border-b border-sidebar-border">
+      <div className="flex items-center gap-2 px-4 py-2 bg-toolbar text-toolbar-foreground border-b border-sidebar-border shrink-0">
         {/* Cursor mode toggle */}
         <div className="flex items-center bg-sidebar-accent rounded-md p-0.5 gap-0.5">
           {CURSOR_MODES.map(({ mode, icon: Icon, label }) => (
@@ -228,23 +235,9 @@ export default function PdfViewer({
 
         <div className="w-px h-5 bg-sidebar-border mx-2" />
 
-        <button
-          onClick={() => onPageChange(Math.max(1, currentPage - 1))}
-          disabled={currentPage <= 1}
-          className="p-1.5 rounded hover:bg-sidebar-accent disabled:opacity-30 transition-colors"
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </button>
-        <span className="text-sm font-mono min-w-[80px] text-center">
-          {currentPage} / {totalPages}
+        <span className="text-sm font-mono">
+          {totalPages} {totalPages === 1 ? "page" : "pages"}
         </span>
-        <button
-          onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
-          disabled={currentPage >= totalPages}
-          className="p-1.5 rounded hover:bg-sidebar-accent disabled:opacity-30 transition-colors"
-        >
-          <ChevronRight className="w-4 h-4" />
-        </button>
 
         <div className="w-px h-5 bg-sidebar-border mx-2" />
 
@@ -288,65 +281,81 @@ export default function PdfViewer({
         />
       </div>
 
-      {/* PDF Area */}
-      <div ref={scrollAreaRef} className="flex-1 overflow-auto bg-muted/30 p-4 min-h-0">
-        <div className="min-w-fit flex justify-center">
-        <div
-          ref={containerRef}
-          className={`pdf-canvas-container relative inline-block shadow-lg ${cursorClass}`}
-          style={{ cursor: cursorMode === "add" ? "crosshair" : cursorMode === "remove" ? "pointer" : "default" }}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
+      {/* PDF Area - all pages continuous */}
+      <div
+        ref={scrollAreaRef}
+        className="flex-1 overflow-auto bg-muted/30 p-4 min-h-0"
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        style={{ cursor: cursorStyle }}
+      >
+        <Document
+          file={pdfUrl}
+          onLoadSuccess={({ numPages }) => onTotalPagesChange(numPages)}
         >
-          <Document
-            file={pdfUrl}
-            onLoadSuccess={({ numPages }) => onTotalPagesChange(numPages)}
-          >
-            <Page
-              pageNumber={currentPage}
-              scale={zoom}
-              renderTextLayer={false}
-              renderAnnotationLayer={false}
-              onLoadSuccess={(page) => setPdfPageWidth(page.width)}
-            />
-          </Document>
+          <div className="flex flex-col items-center gap-4">
+            {pages.map((pageNum) => {
+              const pageRects = rectangles.filter((r) => r.pageNumber === pageNum);
+              return (
+                <div
+                  key={pageNum}
+                  data-page-number={pageNum}
+                  className="relative shadow-lg"
+                  onMouseDown={handleMouseDown}
+                >
+                  <Page
+                    pageNumber={pageNum}
+                    scale={zoom}
+                    renderTextLayer={false}
+                    renderAnnotationLayer={false}
+                    onLoadSuccess={(page) => {
+                      if (pageNum === 1) setPdfPageWidth(page.width);
+                    }}
+                  />
 
-          {/* Drawing overlay */}
-          <div className="drawing-overlay" />
+                  {/* Drawing overlay for this page */}
+                  <div className="absolute inset-0 z-10" />
 
-          {/* Active drawing rectangle */}
-          {drawingRect && (
-            <div
-              className="drawing-rect"
-              style={{
-                left: drawingRect.left,
-                top: drawingRect.top,
-                width: drawingRect.width,
-                height: drawingRect.height,
-              }}
-            />
-          )}
+                  {/* Active drawing rectangle */}
+                  {drawingRect && drawingPage === pageNum && (
+                    <div
+                      className="drawing-rect"
+                      style={{
+                        left: drawingRect.left,
+                        top: drawingRect.top,
+                        width: drawingRect.width,
+                        height: drawingRect.height,
+                      }}
+                    />
+                  )}
 
-          {/* Completed rectangles */}
-          {pageRects.map((r) => (
-            <div
-              key={r.id}
-              className="completed-rect"
-              style={{
-                left: r.x,
-                top: r.y,
-                width: r.width,
-                height: r.height,
-                borderColor: selectedRectId === r.id ? "hsl(var(--primary))" : undefined,
-                background: selectedRectId === r.id ? "hsl(var(--primary) / 0.15)" : undefined,
-                pointerEvents: cursorMode !== "add" ? "auto" : "none",
-              }}
-            />
-          ))}
-        </div>
-        </div>
+                  {/* Completed rectangles for this page */}
+                  {pageRects.map((r) => (
+                    <div
+                      key={r.id}
+                      className="completed-rect"
+                      style={{
+                        left: r.x,
+                        top: r.y,
+                        width: r.width,
+                        height: r.height,
+                        borderColor: selectedRectId === r.id ? "hsl(var(--primary))" : undefined,
+                        background: selectedRectId === r.id ? "hsl(var(--primary) / 0.15)" : undefined,
+                        pointerEvents: cursorMode !== "add" ? "auto" : "none",
+                      }}
+                    />
+                  ))}
+
+                  {/* Page number label */}
+                  <div className="absolute bottom-2 right-2 text-[10px] font-mono bg-foreground/70 text-background px-1.5 py-0.5 rounded z-20">
+                    {pageNum}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Document>
       </div>
     </div>
   );
