@@ -308,7 +308,7 @@ export default function PdfViewer({
               scale={zoom}
               renderTextLayer={false}
               renderAnnotationLayer={false}
-              onLoadSuccess={(page) => setPdfPageWidth(page.originalWidth)}
+              onLoadSuccess={(page) => setPdfPageWidth(page.width)}
             />
           </Document>
 
