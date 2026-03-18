@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { DrawnRectangle, CursorMode, CalibrationLine } from "@/types/estimation";
-import { ZoomIn, ZoomOut, Upload, MousePointer, Plus, Minus, Maximize2, Ruler } from "lucide-react";
+import { ZoomIn, ZoomOut, Upload, MousePointer, Minus, Maximize2, Square, Triangle, Hexagon } from "lucide-react";
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
@@ -21,14 +21,22 @@ interface PdfViewerProps {
   onCursorModeChange: (mode: CursorMode) => void;
   calibrationLine: CalibrationLine | null;
   onCalibrationLineDrawn: (line: CalibrationLine) => void;
+  combineShapes: boolean;
+  onCombineShapesChange: (val: boolean) => void;
 }
 
-const CURSOR_MODES: { mode: CursorMode; icon: typeof MousePointer; label: string }[] = [
+const TOOL_MODES: { mode: CursorMode; icon: typeof MousePointer; label: string }[] = [
   { mode: "select", icon: MousePointer, label: "Select" },
-  { mode: "add", icon: Plus, label: "Add" },
   { mode: "remove", icon: Minus, label: "Remove" },
-  { mode: "calibrate", icon: Ruler, label: "Scale" },
 ];
+
+const SHAPE_MODES: { mode: CursorMode; icon: typeof Square; label: string }[] = [
+  { mode: "add", icon: Square, label: "Rectangle" },
+  { mode: "add_triangle", icon: Triangle, label: "Triangle" },
+  { mode: "add_polygon", icon: Hexagon, label: "Polygon" },
+];
+
+const isDrawMode = (mode: CursorMode) => mode === "add" || mode === "add_triangle" || mode === "add_polygon";
 
 export default function PdfViewer({
   rectangles,
@@ -46,6 +54,8 @@ export default function PdfViewer({
   onCursorModeChange,
   calibrationLine,
   onCalibrationLineDrawn,
+  combineShapes,
+  onCombineShapesChange,
 }: PdfViewerProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const [drawing, setDrawing] = useState(false);
@@ -148,7 +158,7 @@ export default function PdfViewer({
         return;
       }
 
-      // "add" mode
+      // drawing mode (add, add_triangle, add_polygon)
       setDrawingPage(info.pageNumber);
       setStartPoint({ x: info.x, y: info.y });
       setCurrentPoint({ x: info.x, y: info.y });
@@ -171,7 +181,7 @@ export default function PdfViewer({
         return;
       }
 
-      if (!drawing || cursorMode !== "add" || drawingPage === null) return;
+      if (!drawing || !isDrawMode(cursorMode) || drawingPage === null) return;
       const target = e.target as HTMLElement;
       const pageWrapper = target.closest("[data-page-number]") as HTMLElement;
       if (!pageWrapper || parseInt(pageWrapper.dataset.pageNumber!, 10) !== drawingPage) return;
@@ -211,7 +221,7 @@ export default function PdfViewer({
       return;
     }
 
-    if (!drawing || !startPoint || !currentPoint || cursorMode !== "add" || drawingPage === null) {
+    if (!drawing || !startPoint || !currentPoint || !isDrawMode(cursorMode) || drawingPage === null) {
       setDrawing(false);
       setDrawingPage(null);
       return;
@@ -273,7 +283,7 @@ export default function PdfViewer({
       : null;
 
   const cursorStyle =
-    cursorMode === "add" ? "crosshair"
+    isDrawMode(cursorMode) ? "crosshair"
       : cursorMode === "remove" ? "pointer"
       : cursorMode === "calibrate" ? "crosshair"
       : "default";
@@ -310,9 +320,9 @@ export default function PdfViewer({
     <div className="h-full flex flex-col min-h-0 min-w-0">
       {/* Toolbar */}
       <div className="flex items-center gap-2 px-4 py-2 bg-toolbar text-toolbar-foreground border-b border-sidebar-border shrink-0">
-        {/* Cursor mode toggle */}
+        {/* Tool modes */}
         <div className="flex items-center bg-sidebar-accent rounded-md p-0.5 gap-0.5">
-          {CURSOR_MODES.map(({ mode, icon: Icon, label }) => (
+          {TOOL_MODES.map(({ mode, icon: Icon, label }) => (
             <button
               key={mode}
               onClick={() => onCursorModeChange(mode)}
@@ -328,6 +338,40 @@ export default function PdfViewer({
             </button>
           ))}
         </div>
+
+        <div className="w-px h-5 bg-sidebar-border mx-1" />
+
+        {/* Shape modes */}
+        <div className="flex items-center bg-sidebar-accent rounded-md p-0.5 gap-0.5">
+          {SHAPE_MODES.map(({ mode, icon: Icon, label }) => (
+            <button
+              key={mode}
+              onClick={() => onCursorModeChange(mode)}
+              title={label}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
+                cursorMode === mode
+                  ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                  : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="w-px h-5 bg-sidebar-border mx-1" />
+
+        {/* Combine Shapes checkbox */}
+        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={combineShapes}
+            onChange={(e) => onCombineShapesChange(e.target.checked)}
+            className="w-3.5 h-3.5 rounded border-sidebar-border accent-sidebar-primary cursor-pointer"
+          />
+          <span className="text-xs text-sidebar-foreground/70">Combine Shapes</span>
+        </label>
 
         <div className="w-px h-5 bg-sidebar-border mx-2" />
 
@@ -478,7 +522,7 @@ export default function PdfViewer({
                         height: r.height * zoom,
                         borderColor: selectedRectId === r.id ? "hsl(var(--primary))" : undefined,
                         background: selectedRectId === r.id ? "hsl(var(--primary) / 0.15)" : undefined,
-                        pointerEvents: cursorMode !== "add" && cursorMode !== "calibrate" ? "auto" : "none",
+                        pointerEvents: !isDrawMode(cursorMode) && cursorMode !== "calibrate" ? "auto" : "none",
                       }}
                     />
                   ))}

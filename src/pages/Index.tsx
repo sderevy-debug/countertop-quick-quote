@@ -16,6 +16,7 @@ const Index = () => {
   const [calibrationLine, setCalibrationLine] = useState<CalibrationLine | null>(null);
   const [activeFloor, setActiveFloor] = useState("Floor 1");
   const [activeRoom, setActiveRoom] = useState("Room 1");
+  const [combineShapes, setCombineShapes] = useState(false);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -133,6 +134,8 @@ const Index = () => {
               onCursorModeChange={setCursorMode}
               calibrationLine={calibrationLine}
               onCalibrationLineDrawn={setCalibrationLine}
+              combineShapes={combineShapes}
+              onCombineShapesChange={setCombineShapes}
             />
           </ResizablePanel>
           <ResizableHandle withHandle />

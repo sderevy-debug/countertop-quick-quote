@@ -1,4 +1,4 @@
-export type CursorMode = "select" | "add" | "remove" | "calibrate";
+export type CursorMode = "select" | "add" | "remove" | "calibrate" | "add_triangle" | "add_polygon";
 
 export interface DrawnRectangle {
   id: string;
