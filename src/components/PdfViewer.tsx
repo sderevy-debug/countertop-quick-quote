@@ -263,6 +263,13 @@ export default function PdfViewer({
         >
           <ZoomIn className="w-4 h-4" />
         </button>
+        <button
+          onClick={handleFitWidth}
+          title="Fit to width"
+          className="p-1.5 rounded hover:bg-sidebar-accent transition-colors ml-1"
+        >
+          <Maximize2 className="w-4 h-4" />
+        </button>
 
         <div className="flex-1" />
 
