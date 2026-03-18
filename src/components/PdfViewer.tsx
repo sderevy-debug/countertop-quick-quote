@@ -289,7 +289,7 @@ export default function PdfViewer({
       </div>
 
       {/* PDF Area */}
-      <div className="flex-1 overflow-auto bg-muted/30 flex justify-center p-4">
+      <div ref={scrollAreaRef} className="flex-1 overflow-auto bg-muted/30 flex justify-center p-4">
         <div
           ref={containerRef}
           className={`pdf-canvas-container relative inline-block shadow-lg ${cursorClass}`}
@@ -303,7 +303,13 @@ export default function PdfViewer({
             file={pdfUrl}
             onLoadSuccess={({ numPages }) => onTotalPagesChange(numPages)}
           >
-            <Page pageNumber={currentPage} scale={zoom} renderTextLayer={false} renderAnnotationLayer={false} />
+            <Page
+              pageNumber={currentPage}
+              scale={zoom}
+              renderTextLayer={false}
+              renderAnnotationLayer={false}
+              onLoadSuccess={(page) => setPdfPageWidth(page.originalWidth)}
+            />
           </Document>
 
           {/* Drawing overlay */}
