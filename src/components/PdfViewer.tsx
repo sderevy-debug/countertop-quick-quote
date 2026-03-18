@@ -156,7 +156,7 @@ export default function PdfViewer({
         return;
       }
 
-      // "add" mode
+      // drawing mode (add, add_triangle, add_polygon)
       setDrawingPage(info.pageNumber);
       setStartPoint({ x: info.x, y: info.y });
       setCurrentPoint({ x: info.x, y: info.y });
