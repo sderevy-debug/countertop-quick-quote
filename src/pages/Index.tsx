@@ -7,19 +7,20 @@ import { Upload, Moon, Sun } from "lucide-react";
 
 const Index = () => {
   const [rectangles, setRectangles] = useState<DrawnRectangle[]>([]);
-  const [scale, setScale] = useState(0); // 0 means uncalibrated
+  const [scale, setScale] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [selectedRectId, setSelectedRectId] = useState<string | null>(null);
   const [cursorMode, setCursorMode] = useState<CursorMode>("add");
   const [darkMode, setDarkMode] = useState(true);
   const [calibrationLine, setCalibrationLine] = useState<CalibrationLine | null>(null);
+  const [activeFloor, setActiveFloor] = useState("Floor 1");
+  const [activeRoom, setActiveRoom] = useState("Room 1");
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
   }, [darkMode]);
 
-  // Recalculate all rectangle real-world dimensions when scale changes
   const recalcRectangles = useCallback((rects: DrawnRectangle[], newScale: number): DrawnRectangle[] => {
     if (newScale <= 0) return rects;
     return rects.map((r) => {
@@ -36,7 +37,7 @@ const Index = () => {
   }, [recalcRectangles]);
 
   const handleRectangleDrawn = useCallback(
-    (rect: Omit<DrawnRectangle, "id" | "label" | "realWidth" | "realHeight" | "area">) => {
+    (rect: Omit<DrawnRectangle, "id" | "label" | "realWidth" | "realHeight" | "area" | "floor" | "room">) => {
       const id = crypto.randomUUID();
       setRectangles((prev) => {
         const label = `R${prev.length + 1}`;
@@ -48,6 +49,8 @@ const Index = () => {
           ...rect,
           id,
           label,
+          floor: activeFloor,
+          room: activeRoom,
           realWidth,
           realHeight,
           area,
@@ -56,7 +59,7 @@ const Index = () => {
       });
       setSelectedRectId(id);
     },
-    [scale]
+    [scale, activeFloor, activeRoom]
   );
 
   const handleDeleteRect = useCallback((id: string) => {
@@ -71,14 +74,12 @@ const Index = () => {
 
   return (
     <div className="h-screen w-full flex flex-col">
-      {/* Top toolbar - always visible */}
+      {/* Top toolbar */}
       <div className="flex items-center gap-3 px-4 py-2 bg-toolbar text-toolbar-foreground border-b border-sidebar-border shrink-0">
         <span className="text-sm font-semibold tracking-wide uppercase">
           Blueprint Estimator
         </span>
-
         <div className="flex-1" />
-
         <button
           onClick={() => setDarkMode((d) => !d)}
           title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
@@ -88,7 +89,6 @@ const Index = () => {
         </button>
       </div>
 
-      {/* Main content */}
       {!pdfFile ? (
         <div className="flex-1 flex items-center justify-center bg-muted/50">
           <div
@@ -145,6 +145,10 @@ const Index = () => {
               selectedRectId={selectedRectId}
               onSelectRect={setSelectedRectId}
               onRequestCalibrate={() => setCursorMode("calibrate")}
+              activeFloor={activeFloor}
+              activeRoom={activeRoom}
+              onActiveFloorChange={setActiveFloor}
+              onActiveRoomChange={setActiveRoom}
             />
           </ResizablePanel>
         </ResizablePanelGroup>
