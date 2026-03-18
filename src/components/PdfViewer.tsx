@@ -36,6 +36,8 @@ const SHAPE_MODES: { mode: CursorMode; icon: typeof Square; label: string }[] = 
   { mode: "add_polygon", icon: Hexagon, label: "Polygon" },
 ];
 
+const isDrawMode = (mode: CursorMode) => mode === "add" || mode === "add_triangle" || mode === "add_polygon";
+
 export default function PdfViewer({
   rectangles,
   onRectangleDrawn,
