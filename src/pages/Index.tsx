@@ -2,8 +2,9 @@ import { useState, useCallback, useEffect } from "react";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import PdfViewer from "@/components/PdfViewer";
 import MeasurementSidebar from "@/components/MeasurementSidebar";
-import { DrawnRectangle, CursorMode, CalibrationLine, polygonPixelArea } from "@/types/estimation";
+import { DrawnRectangle, CursorMode, CalibrationLine, polygonPixelArea, Point, boundingBox } from "@/types/estimation";
 import { Upload, Moon, Sun } from "lucide-react";
+import polygonClipping, { Polygon as ClipPolygon } from "polygon-clipping";
 
 const Index = () => {
   const [rectangles, setRectangles] = useState<DrawnRectangle[]>([]);
