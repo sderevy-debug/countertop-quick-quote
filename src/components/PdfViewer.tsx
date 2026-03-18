@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { DrawnRectangle, CursorMode, CalibrationLine } from "@/types/estimation";
-import { ZoomIn, ZoomOut, Upload, MousePointer, Plus, Minus, Maximize2, Ruler } from "lucide-react";
+import { ZoomIn, ZoomOut, Upload, MousePointer, Minus, Maximize2, Square, Triangle, Hexagon } from "lucide-react";
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
