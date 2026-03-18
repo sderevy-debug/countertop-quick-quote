@@ -52,6 +52,8 @@ export default function PdfViewer({
   onCursorModeChange,
   calibrationLine,
   onCalibrationLineDrawn,
+  combineShapes,
+  onCombineShapesChange,
 }: PdfViewerProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const [drawing, setDrawing] = useState(false);
