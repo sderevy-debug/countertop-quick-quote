@@ -219,7 +219,7 @@ export default function PdfViewer({
       return;
     }
 
-    if (!drawing || !startPoint || !currentPoint || cursorMode !== "add" || drawingPage === null) {
+    if (!drawing || !startPoint || !currentPoint || !isDrawMode(cursorMode) || drawingPage === null) {
       setDrawing(false);
       setDrawingPage(null);
       return;
