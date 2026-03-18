@@ -3,6 +3,7 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/componen
 import PdfViewer from "@/components/PdfViewer";
 import MeasurementSidebar from "@/components/MeasurementSidebar";
 import { DrawnRectangle, CursorMode } from "@/types/estimation";
+import { Upload } from "lucide-react";
 
 const Index = () => {
   const [rectangles, setRectangles] = useState<DrawnRectangle[]>([]);
@@ -44,6 +45,35 @@ const Index = () => {
     setRectangles([]);
     setSelectedRectId(null);
   }, []);
+
+  if (!pdfFile) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-muted/50">
+        <div
+          className="flex flex-col items-center gap-4 p-12 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-primary/50 transition-colors"
+          onClick={() => document.getElementById("pdf-upload-input")?.click()}
+        >
+          <Upload className="w-12 h-12 text-muted-foreground" />
+          <div className="text-center">
+            <p className="text-lg font-medium text-foreground">Upload a PDF</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Drop your countertop blueprint or floor plan here
+            </p>
+          </div>
+          <input
+            id="pdf-upload-input"
+            type="file"
+            accept=".pdf"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file && file.type === "application/pdf") setPdfFile(file);
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <ResizablePanelGroup direction="horizontal" className="h-screen w-full">
