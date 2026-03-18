@@ -44,12 +44,21 @@ export default function PdfViewer({
   onCursorModeChange,
 }: PdfViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const [drawing, setDrawing] = useState(false);
   const [startPoint, setStartPoint] = useState<{ x: number; y: number } | null>(null);
   const [currentPoint, setCurrentPoint] = useState<{ x: number; y: number } | null>(null);
   const [zoom, setZoom] = useState(1.2);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfPageWidth, setPdfPageWidth] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFitWidth = useCallback(() => {
+    if (!scrollAreaRef.current || !pdfPageWidth) return;
+    const availableWidth = scrollAreaRef.current.clientWidth - 32; // subtract padding
+    const newZoom = availableWidth / pdfPageWidth;
+    setZoom(Math.max(0.5, Math.min(3, newZoom)));
+  }, [pdfPageWidth]);
 
   useEffect(() => {
     if (pdfFile) {
