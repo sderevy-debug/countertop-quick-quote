@@ -522,7 +522,7 @@ export default function PdfViewer({
                         height: r.height * zoom,
                         borderColor: selectedRectId === r.id ? "hsl(var(--primary))" : undefined,
                         background: selectedRectId === r.id ? "hsl(var(--primary) / 0.15)" : undefined,
-                        pointerEvents: cursorMode !== "add" && cursorMode !== "calibrate" ? "auto" : "none",
+                        pointerEvents: !isDrawMode(cursorMode) && cursorMode !== "calibrate" ? "auto" : "none",
                       }}
                     />
                   ))}
