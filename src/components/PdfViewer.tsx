@@ -289,7 +289,8 @@ export default function PdfViewer({
       </div>
 
       {/* PDF Area */}
-      <div ref={scrollAreaRef} className="flex-1 overflow-auto bg-muted/30 flex justify-center p-4">
+      <div ref={scrollAreaRef} className="flex-1 overflow-auto bg-muted/30 p-4 min-h-0">
+        <div className="min-w-fit flex justify-center">
         <div
           ref={containerRef}
           className={`pdf-canvas-container relative inline-block shadow-lg ${cursorClass}`}
