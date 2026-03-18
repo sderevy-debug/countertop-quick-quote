@@ -25,11 +25,15 @@ interface PdfViewerProps {
   onCombineShapesChange: (val: boolean) => void;
 }
 
-const CURSOR_MODES: { mode: CursorMode; icon: typeof MousePointer; label: string }[] = [
+const TOOL_MODES: { mode: CursorMode; icon: typeof MousePointer; label: string }[] = [
   { mode: "select", icon: MousePointer, label: "Select" },
-  { mode: "add", icon: Plus, label: "Add" },
   { mode: "remove", icon: Minus, label: "Remove" },
-  { mode: "calibrate", icon: Ruler, label: "Scale" },
+];
+
+const SHAPE_MODES: { mode: CursorMode; icon: typeof Square; label: string }[] = [
+  { mode: "add", icon: Square, label: "Rectangle" },
+  { mode: "add_triangle", icon: Triangle, label: "Triangle" },
+  { mode: "add_polygon", icon: Hexagon, label: "Polygon" },
 ];
 
 export default function PdfViewer({
