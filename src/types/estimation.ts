@@ -9,6 +9,8 @@ export interface DrawnRectangle {
   height: number;
   pageNumber: number;
   label: string;
+  floor: string;
+  room: string;
   // Real-world dimensions in inches (after scale applied)
   realWidth: number;
   realHeight: number;
