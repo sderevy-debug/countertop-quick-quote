@@ -435,7 +435,7 @@ export default function PdfViewer({
 
                   {/* Active calibration line */}
                   {calDrawing && calStartPoint && calCurrentPoint && calStartPoint.page === pageNum && (
-                    <svg className="absolute inset-0 z-12 pointer-events-none" style={{ zIndex: 12 }}>
+                    <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 12, overflow: "visible" }}>
                       <line
                         x1={calStartPoint.x}
                         y1={calStartPoint.y}
@@ -450,26 +450,9 @@ export default function PdfViewer({
                     </svg>
                   )}
 
-                  {/* Saved calibration line */}
-                  {calibrationLine && calibrationLine.pageNumber === pageNum && (
-                    <svg className="absolute inset-0 pointer-events-none" style={{ zIndex: 12 }}>
-                      <line
-                        x1={calibrationLine.startX * zoom}
-                        y1={calibrationLine.startY * zoom}
-                        x2={calibrationLine.endX * zoom}
-                        y2={calibrationLine.endY * zoom}
-                        stroke="hsl(var(--warning))"
-                        strokeWidth={2}
-                        strokeDasharray="6 3"
-                      />
-                      <circle cx={calibrationLine.startX * zoom} cy={calibrationLine.startY * zoom} r={3} fill="hsl(var(--warning))" />
-                      <circle cx={calibrationLine.endX * zoom} cy={calibrationLine.endY * zoom} r={3} fill="hsl(var(--warning))" />
-                    </svg>
-                  )}
-
                   {/* Pending calibration line (during input) */}
                   {pendingCalLine && pendingCalLine.pageNumber === pageNum && showCalInput && (
-                    <svg className="absolute inset-0 pointer-events-none" style={{ zIndex: 12 }}>
+                    <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 12, overflow: "visible" }}>
                       <line
                         x1={pendingCalLine.startX * zoom}
                         y1={pendingCalLine.startY * zoom}
