@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { DrawnRectangle, CursorMode } from "@/types/estimation";
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Upload, MousePointer, Plus, Minus } from "lucide-react";
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Upload, MousePointer, Plus, Minus, Maximize2 } from "lucide-react";
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
@@ -44,12 +44,21 @@ export default function PdfViewer({
   onCursorModeChange,
 }: PdfViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const [drawing, setDrawing] = useState(false);
   const [startPoint, setStartPoint] = useState<{ x: number; y: number } | null>(null);
   const [currentPoint, setCurrentPoint] = useState<{ x: number; y: number } | null>(null);
   const [zoom, setZoom] = useState(1.2);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfPageWidth, setPdfPageWidth] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFitWidth = useCallback(() => {
+    if (!scrollAreaRef.current || !pdfPageWidth) return;
+    const availableWidth = scrollAreaRef.current.clientWidth - 32; // subtract padding
+    const newZoom = availableWidth / pdfPageWidth;
+    setZoom(Math.max(0.5, Math.min(3, newZoom)));
+  }, [pdfPageWidth]);
 
   useEffect(() => {
     if (pdfFile) {
@@ -254,6 +263,13 @@ export default function PdfViewer({
         >
           <ZoomIn className="w-4 h-4" />
         </button>
+        <button
+          onClick={handleFitWidth}
+          title="Fit to width"
+          className="p-1.5 rounded hover:bg-sidebar-accent transition-colors ml-1"
+        >
+          <Maximize2 className="w-4 h-4" />
+        </button>
 
         <div className="flex-1" />
 
@@ -273,7 +289,7 @@ export default function PdfViewer({
       </div>
 
       {/* PDF Area */}
-      <div className="flex-1 overflow-auto bg-muted/30 flex justify-center p-4">
+      <div ref={scrollAreaRef} className="flex-1 overflow-auto bg-muted/30 flex justify-center p-4">
         <div
           ref={containerRef}
           className={`pdf-canvas-container relative inline-block shadow-lg ${cursorClass}`}
@@ -287,7 +303,13 @@ export default function PdfViewer({
             file={pdfUrl}
             onLoadSuccess={({ numPages }) => onTotalPagesChange(numPages)}
           >
-            <Page pageNumber={currentPage} scale={zoom} renderTextLayer={false} renderAnnotationLayer={false} />
+            <Page
+              pageNumber={currentPage}
+              scale={zoom}
+              renderTextLayer={false}
+              renderAnnotationLayer={false}
+              onLoadSuccess={(page) => setPdfPageWidth(page.width)}
+            />
           </Document>
 
           {/* Drawing overlay */}
