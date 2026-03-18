@@ -2,8 +2,9 @@ import { useState, useCallback, useEffect } from "react";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import PdfViewer from "@/components/PdfViewer";
 import MeasurementSidebar from "@/components/MeasurementSidebar";
-import { DrawnRectangle, CursorMode, CalibrationLine, polygonPixelArea } from "@/types/estimation";
+import { DrawnRectangle, CursorMode, CalibrationLine, polygonPixelArea, Point, boundingBox } from "@/types/estimation";
 import { Upload, Moon, Sun } from "lucide-react";
+import polygonClipping, { Polygon as ClipPolygon } from "polygon-clipping";
 
 const Index = () => {
   const [rectangles, setRectangles] = useState<DrawnRectangle[]>([]);
@@ -44,10 +45,108 @@ const Index = () => {
     setRectangles((prev) => recalcRectangles(prev, newScale));
   }, [recalcRectangles]);
 
+
+  const shapeToClipPoly = useCallback((r: { shapeType: string; points?: Point[]; x: number; y: number; width: number; height: number }): ClipPolygon => {
+    if (r.shapeType !== "rectangle" && r.points && r.points.length >= 3) {
+      const ring: [number, number][] = r.points.map((p) => [p.x, p.y]);
+      ring.push([r.points[0].x, r.points[0].y]); // close ring
+      return [ring];
+    }
+    // Rectangle → 4-point polygon
+    return [
+      [
+        [r.x, r.y],
+        [r.x + r.width, r.y],
+        [r.x + r.width, r.y + r.height],
+        [r.x, r.y + r.height],
+        [r.x, r.y], // close ring
+      ],
+    ];
+  }, []);
+
+  // Check if two polygons overlap by testing if their intersection is non-empty
+  const polygonsOverlap = useCallback((a: ClipPolygon, b: ClipPolygon): boolean => {
+    try {
+      const result = polygonClipping.intersection(a, b);
+      return result.length > 0;
+    } catch {
+      return false;
+    }
+  }, []);
+
   const handleRectangleDrawn = useCallback(
     (rect: Omit<DrawnRectangle, "id" | "label" | "realWidth" | "realHeight" | "area" | "floor" | "room">) => {
       const id = crypto.randomUUID();
       setRectangles((prev) => {
+        const newClipPoly = shapeToClipPoly(rect);
+
+        if (combineShapes) {
+          // Find all existing shapes on the same page that overlap the new shape
+          const overlapping: DrawnRectangle[] = [];
+          const nonOverlapping: DrawnRectangle[] = [];
+
+          for (const existing of prev) {
+            if (existing.pageNumber === rect.pageNumber) {
+              const existingClip = shapeToClipPoly(existing);
+              if (polygonsOverlap(newClipPoly, existingClip)) {
+                overlapping.push(existing);
+              } else {
+                nonOverlapping.push(existing);
+              }
+            } else {
+              nonOverlapping.push(existing);
+            }
+          }
+
+          if (overlapping.length > 0) {
+            // Union all overlapping shapes + the new shape
+            let merged: ClipPolygon = newClipPoly;
+            for (const ov of overlapping) {
+              const ovClip = shapeToClipPoly(ov);
+              try {
+                const unionResult = polygonClipping.union(merged, ovClip);
+                if (unionResult.length > 0) {
+                  merged = unionResult[0]; // take first polygon from multipolygon
+                }
+              } catch {
+                // If union fails, skip this shape
+              }
+            }
+
+            // Convert merged polygon back to DrawnRectangle
+            // Use the first ring (outer boundary), drop the closing point
+            const outerRing = merged[0];
+            const mergedPoints: Point[] = outerRing.slice(0, -1).map(([px, py]) => ({ x: px, y: py }));
+            const bb = boundingBox(mergedPoints);
+            const areaPx = polygonPixelArea(mergedPoints);
+            const realWidth = scale > 0 ? bb.width / scale : 0;
+            const realHeight = scale > 0 ? bb.height / scale : 0;
+            const area = scale > 0 ? areaPx / (scale * scale) / 144 : 0;
+
+            // Keep the first overlapping shape's label
+            const label = overlapping[0].label;
+            const mergedRect: DrawnRectangle = {
+              id: overlapping[0].id, // keep first shape's ID
+              x: bb.x,
+              y: bb.y,
+              width: bb.width,
+              height: bb.height,
+              pageNumber: rect.pageNumber,
+              label,
+              floor: overlapping[0].floor,
+              room: overlapping[0].room,
+              shapeType: "polygon",
+              points: mergedPoints,
+              realWidth,
+              realHeight,
+              area,
+            };
+
+            return [...nonOverlapping, mergedRect];
+          }
+        }
+
+        // No combine or no overlap — add normally
         const label = `R${prev.length + 1}`;
         let areaPx: number;
         if (rect.shapeType !== "rectangle" && rect.points && rect.points.length >= 3) {
@@ -73,7 +172,7 @@ const Index = () => {
       });
       setSelectedRectId(id);
     },
-    [scale, activeFloor, activeRoom]
+    [scale, activeFloor, activeRoom, combineShapes, shapeToClipPoly, polygonsOverlap]
   );
 
   const handleDeleteRect = useCallback((id: string) => {
