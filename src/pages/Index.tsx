@@ -76,7 +76,9 @@ const Index = () => {
 
   const handleRectangleDrawn = useCallback(
     (rect: Omit<DrawnRectangle, "id" | "label" | "realWidth" | "realHeight" | "area" | "floor" | "room">) => {
-      const id = crypto.randomUUID();
+      const id = typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2) + Date.now().toString(36);
       setRectangles((prev) => {
         const newClipPoly = shapeToClipPoly(rect);
 
