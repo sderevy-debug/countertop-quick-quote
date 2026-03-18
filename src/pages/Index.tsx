@@ -49,9 +49,15 @@ const Index = () => {
       const id = crypto.randomUUID();
       setRectangles((prev) => {
         const label = `R${prev.length + 1}`;
+        let areaPx: number;
+        if (rect.shapeType !== "rectangle" && rect.points && rect.points.length >= 3) {
+          areaPx = polygonPixelArea(rect.points);
+        } else {
+          areaPx = rect.width * rect.height;
+        }
         const realWidth = scale > 0 ? rect.width / scale : 0;
         const realHeight = scale > 0 ? rect.height / scale : 0;
-        const area = (realWidth * realHeight) / 144;
+        const area = scale > 0 ? areaPx / (scale * scale) / 144 : 0;
 
         const newRect: DrawnRectangle = {
           ...rect,
