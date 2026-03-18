@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import PdfViewer from "@/components/PdfViewer";
 import MeasurementSidebar from "@/components/MeasurementSidebar";
-import { DrawnRectangle, CursorMode, CalibrationLine } from "@/types/estimation";
+import { DrawnRectangle, CursorMode, CalibrationLine, polygonPixelArea } from "@/types/estimation";
 import { Upload, Moon, Sun } from "lucide-react";
 
 const Index = () => {
@@ -25,9 +25,16 @@ const Index = () => {
   const recalcRectangles = useCallback((rects: DrawnRectangle[], newScale: number): DrawnRectangle[] => {
     if (newScale <= 0) return rects;
     return rects.map((r) => {
+      let areaPx: number;
+      if (r.shapeType !== "rectangle" && r.points && r.points.length >= 3) {
+        areaPx = polygonPixelArea(r.points);
+      } else {
+        areaPx = r.width * r.height;
+      }
+      const areaSqIn = areaPx / (newScale * newScale);
+      const area = areaSqIn / 144; // sq ft
       const realWidth = r.width / newScale;
       const realHeight = r.height / newScale;
-      const area = (realWidth * realHeight) / 144;
       return { ...r, realWidth, realHeight, area };
     });
   }, []);
@@ -42,9 +49,15 @@ const Index = () => {
       const id = crypto.randomUUID();
       setRectangles((prev) => {
         const label = `R${prev.length + 1}`;
+        let areaPx: number;
+        if (rect.shapeType !== "rectangle" && rect.points && rect.points.length >= 3) {
+          areaPx = polygonPixelArea(rect.points);
+        } else {
+          areaPx = rect.width * rect.height;
+        }
         const realWidth = scale > 0 ? rect.width / scale : 0;
         const realHeight = scale > 0 ? rect.height / scale : 0;
-        const area = (realWidth * realHeight) / 144;
+        const area = scale > 0 ? areaPx / (scale * scale) / 144 : 0;
 
         const newRect: DrawnRectangle = {
           ...rect,
