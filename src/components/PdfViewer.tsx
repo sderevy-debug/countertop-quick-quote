@@ -21,6 +21,8 @@ interface PdfViewerProps {
   onCursorModeChange: (mode: CursorMode) => void;
   calibrationLine: CalibrationLine | null;
   onCalibrationLineDrawn: (line: CalibrationLine) => void;
+  combineShapes: boolean;
+  onCombineShapesChange: (val: boolean) => void;
 }
 
 const CURSOR_MODES: { mode: CursorMode; icon: typeof MousePointer; label: string }[] = [
