@@ -134,6 +134,8 @@ const Index = () => {
               onCursorModeChange={setCursorMode}
               calibrationLine={calibrationLine}
               onCalibrationLineDrawn={setCalibrationLine}
+              combineShapes={combineShapes}
+              onCombineShapesChange={setCombineShapes}
             />
           </ResizablePanel>
           <ResizableHandle withHandle />
