@@ -179,7 +179,7 @@ export default function PdfViewer({
         return;
       }
 
-      if (!drawing || cursorMode !== "add" || drawingPage === null) return;
+      if (!drawing || !isDrawMode(cursorMode) || drawingPage === null) return;
       const target = e.target as HTMLElement;
       const pageWrapper = target.closest("[data-page-number]") as HTMLElement;
       if (!pageWrapper || parseInt(pageWrapper.dataset.pageNumber!, 10) !== drawingPage) return;
