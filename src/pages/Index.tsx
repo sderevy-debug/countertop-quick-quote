@@ -25,9 +25,16 @@ const Index = () => {
   const recalcRectangles = useCallback((rects: DrawnRectangle[], newScale: number): DrawnRectangle[] => {
     if (newScale <= 0) return rects;
     return rects.map((r) => {
+      let areaPx: number;
+      if (r.shapeType !== "rectangle" && r.points && r.points.length >= 3) {
+        areaPx = polygonPixelArea(r.points);
+      } else {
+        areaPx = r.width * r.height;
+      }
+      const areaSqIn = areaPx / (newScale * newScale);
+      const area = areaSqIn / 144; // sq ft
       const realWidth = r.width / newScale;
       const realHeight = r.height / newScale;
-      const area = (realWidth * realHeight) / 144;
       return { ...r, realWidth, realHeight, area };
     });
   }, []);
