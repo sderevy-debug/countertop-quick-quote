@@ -23,7 +23,7 @@ export default function MeasurementSidebar({
   const totalArea = rectangles.reduce((sum, r) => sum + r.area, 0);
 
   return (
-    <div className="w-80 flex flex-col bg-sidebar text-sidebar-foreground border-l border-sidebar-border">
+    <div className="w-full h-full flex flex-col bg-sidebar text-sidebar-foreground border-l border-sidebar-border overflow-hidden">
       {/* Header */}
       <div className="px-4 py-3 border-b border-sidebar-border">
         <h2 className="text-sm font-semibold tracking-wide uppercase text-sidebar-foreground/80">

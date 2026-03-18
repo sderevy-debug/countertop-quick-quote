@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import PdfViewer from "@/components/PdfViewer";
 import MeasurementSidebar from "@/components/MeasurementSidebar";
 import { DrawnRectangle, CursorMode } from "@/types/estimation";
@@ -46,33 +47,38 @@ const Index = () => {
   }, []);
 
   return (
-    <div className="flex h-screen w-full overflow-hidden">
-      <PdfViewer
-        rectangles={rectangles}
-        onRectangleDrawn={handleRectangleDrawn}
-        onDeleteRect={handleDeleteRect}
-        scale={scale}
-        pdfFile={pdfFile}
-        onFileLoad={setPdfFile}
-        currentPage={currentPage}
-        totalPages={totalPages}
-        onPageChange={setCurrentPage}
-        onTotalPagesChange={setTotalPages}
-        selectedRectId={selectedRectId}
-        onSelectRect={setSelectedRectId}
-        cursorMode={cursorMode}
-        onCursorModeChange={setCursorMode}
-      />
-      <MeasurementSidebar
-        rectangles={rectangles}
-        scale={scale}
-        onScaleChange={setScale}
-        onDeleteRect={handleDeleteRect}
-        onClearAll={handleClearAll}
-        selectedRectId={selectedRectId}
-        onSelectRect={setSelectedRectId}
-      />
-    </div>
+    <ResizablePanelGroup direction="horizontal" className="h-screen w-full">
+      <ResizablePanel defaultSize={75} minSize={40}>
+        <PdfViewer
+          rectangles={rectangles}
+          onRectangleDrawn={handleRectangleDrawn}
+          onDeleteRect={handleDeleteRect}
+          scale={scale}
+          pdfFile={pdfFile}
+          onFileLoad={setPdfFile}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          onTotalPagesChange={setTotalPages}
+          selectedRectId={selectedRectId}
+          onSelectRect={setSelectedRectId}
+          cursorMode={cursorMode}
+          onCursorModeChange={setCursorMode}
+        />
+      </ResizablePanel>
+      <ResizableHandle withHandle />
+      <ResizablePanel defaultSize={25} minSize={15} maxSize={50}>
+        <MeasurementSidebar
+          rectangles={rectangles}
+          scale={scale}
+          onScaleChange={setScale}
+          onDeleteRect={handleDeleteRect}
+          onClearAll={handleClearAll}
+          selectedRectId={selectedRectId}
+          onSelectRect={setSelectedRectId}
+        />
+      </ResizablePanel>
+    </ResizablePanelGroup>
   );
 };
 
