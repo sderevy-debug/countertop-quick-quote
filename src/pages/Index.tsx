@@ -192,7 +192,7 @@ const Index = () => {
       {/* Top toolbar */}
       <div className="flex items-center gap-3 px-4 py-2 bg-toolbar text-toolbar-foreground border-b border-sidebar-border shrink-0">
         <span className="text-sm font-semibold tracking-wide uppercase">
-          Blueprint Estimator
+          Estimates
         </span>
         <div className="flex-1" />
         <button
