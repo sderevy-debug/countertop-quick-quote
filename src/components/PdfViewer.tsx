@@ -97,6 +97,11 @@ export default function PdfViewer({
   const [calUnit, setCalUnit] = useState<"ft" | "in">("ft");
   const [pendingCalLine, setPendingCalLine] = useState<CalibrationLine | null>(null);
   const calInputRef = useRef<HTMLInputElement>(null);
+
+  // Edge designation state
+  const [showDrawTools, setShowDrawTools] = useState(false);
+  const [showEdgeTypeMenu, setShowEdgeTypeMenu] = useState<{ shapeId: string; edgeIndex: number; x: number; y: number } | null>(null);
+
   // Reset poly state when cursor mode changes
   useEffect(() => {
     setPolyPoints([]);
