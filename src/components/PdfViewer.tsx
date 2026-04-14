@@ -892,6 +892,37 @@ export default function PdfViewer({
                   {/* Completed shapes */}
                   {pageRects.map((r) => renderShape(r, selectedRectId === r.id))}
 
+                  {/* Edge designations overlay */}
+                  {pageRects.some((r) => r.edges && r.edges.length > 0) && (
+                    <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 15, overflow: "visible" }}>
+                      {pageRects.flatMap((r) => {
+                        if (!r.edges || r.edges.length === 0) return [];
+                        const vertices = getShapeVertices(r);
+                        return r.edges.map((edge, ei) => {
+                          const a = vertices[edge.edgeIndex];
+                          const b = vertices[(edge.edgeIndex + 1) % vertices.length];
+                          const color = edge.type === "backsplash" ? "hsl(var(--warning))"
+                            : edge.type === "waterfall" ? "hsl(var(--accent))"
+                            : "hsl(var(--muted-foreground))";
+                          const midX = ((a.x + b.x) / 2) * zoom;
+                          const midY = ((a.y + b.y) / 2) * zoom;
+                          return (
+                            <g key={`${r.id}-edge-${ei}`}>
+                              <line
+                                x1={a.x * zoom} y1={a.y * zoom}
+                                x2={b.x * zoom} y2={b.y * zoom}
+                                stroke={color} strokeWidth={4} strokeLinecap="round"
+                              />
+                              <text x={midX} y={midY - 6} textAnchor="middle" fill={color} fontSize={10} fontWeight="bold">
+                                {edge.type === "backsplash" ? "BS" : edge.type === "waterfall" ? "WF" : "M"}
+                              </text>
+                            </g>
+                          );
+                        });
+                      })}
+                    </svg>
+                  )}
+
                   {/* Page number label */}
                   <div className="absolute bottom-2 right-2 text-[10px] font-mono bg-foreground/70 text-background px-1.5 py-0.5 rounded z-20">
                     {pageNum}
@@ -962,6 +993,65 @@ export default function PdfViewer({
                   Apply Scale
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edge type context menu */}
+        {showEdgeTypeMenu && (
+          <div
+            className="fixed z-[60] bg-card border border-border rounded-lg shadow-xl p-1 min-w-[140px]"
+            style={{ left: showEdgeTypeMenu.x, top: showEdgeTypeMenu.y }}
+          >
+            {EDGE_TYPES.map(({ type, label, defaultDepth }) => {
+              const shape = rectangles.find((r) => r.id === showEdgeTypeMenu.shapeId);
+              const existing = shape?.edges?.find((e) => e.edgeIndex === showEdgeTypeMenu.edgeIndex);
+              const isActive = existing?.type === type;
+              return (
+                <button
+                  key={type}
+                  onClick={() => {
+                    const shapeId = showEdgeTypeMenu.shapeId;
+                    const edgeIdx = showEdgeTypeMenu.edgeIndex;
+                    const shape = rectangles.find((r) => r.id === shapeId);
+                    if (!shape) return;
+
+                    let newEdges = [...(shape.edges || [])];
+                    const existingIdx = newEdges.findIndex((e) => e.edgeIndex === edgeIdx);
+
+                    if (isActive) {
+                      // Remove designation
+                      newEdges = newEdges.filter((e) => e.edgeIndex !== edgeIdx);
+                    } else if (existingIdx >= 0) {
+                      // Update type
+                      newEdges[existingIdx] = { edgeIndex: edgeIdx, type, depth: defaultDepth };
+                    } else {
+                      // Add new
+                      newEdges.push({ edgeIndex: edgeIdx, type, depth: defaultDepth });
+                    }
+
+                    onUpdateRect(shapeId, { edges: newEdges });
+                    setShowEdgeTypeMenu(null);
+                  }}
+                  className={`w-full text-left px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                    isActive
+                      ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                      : "text-foreground hover:bg-sidebar-accent"
+                  }`}
+                >
+                  {label}
+                  {type === "backsplash" && <span className="text-muted-foreground ml-1">(4in)</span>}
+                  {type === "waterfall" && <span className="text-muted-foreground ml-1">(3ft)</span>}
+                </button>
+              );
+            })}
+            <div className="border-t border-border mt-1 pt-1">
+              <button
+                onClick={() => setShowEdgeTypeMenu(null)}
+                className="w-full text-left px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded transition-colors"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         )}
