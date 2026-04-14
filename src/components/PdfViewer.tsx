@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
-import { DrawnRectangle, CursorMode, CalibrationLine, Point, boundingBox, pointInPolygon } from "@/types/estimation";
-import { ZoomIn, ZoomOut, Upload, MousePointer, Minus, Maximize2, Square, Triangle, Hexagon } from "lucide-react";
+import { DrawnRectangle, CursorMode, CalibrationLine, Point, EdgeType, EdgeDesignation, boundingBox, pointInPolygon, getShapeVertices, distToSegment } from "@/types/estimation";
+import { ZoomIn, ZoomOut, Upload, MousePointer, Minus, Maximize2, Square, Triangle, Hexagon, Pencil, Plus, ChevronDown } from "lucide-react";
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
@@ -9,6 +9,7 @@ interface PdfViewerProps {
   rectangles: DrawnRectangle[];
   onRectangleDrawn: (rect: Omit<DrawnRectangle, "id" | "label" | "realWidth" | "realHeight" | "area" | "floor" | "room">) => void;
   onDeleteRect: (id: string) => void;
+  onUpdateRect: (id: string, updates: Partial<DrawnRectangle>) => void;
   scale: number;
   onScaleChange: (scale: number) => void;
   pdfFile: File | null;
@@ -39,10 +40,17 @@ const SHAPE_MODES: { mode: CursorMode; icon: typeof Square; label: string }[] = 
 const isDrawMode = (mode: CursorMode) => mode === "add" || mode === "add_triangle" || mode === "add_polygon";
 const isPointMode = (mode: CursorMode) => mode === "add_triangle" || mode === "add_polygon";
 
+const EDGE_TYPES: { type: EdgeType; label: string; defaultDepth: number }[] = [
+  { type: "backsplash", label: "Backsplash", defaultDepth: 4 },    // 4 inches
+  { type: "waterfall", label: "Waterfall", defaultDepth: 36 },      // 3 feet = 36 inches
+  { type: "mitered", label: "Mitered", defaultDepth: 0 },
+];
+
 export default function PdfViewer({
   rectangles,
   onRectangleDrawn,
   onDeleteRect,
+  onUpdateRect,
   scale,
   onScaleChange,
   pdfFile,
@@ -89,6 +97,11 @@ export default function PdfViewer({
   const [calUnit, setCalUnit] = useState<"ft" | "in">("ft");
   const [pendingCalLine, setPendingCalLine] = useState<CalibrationLine | null>(null);
   const calInputRef = useRef<HTMLInputElement>(null);
+
+  // Edge designation state
+  const [showDrawTools, setShowDrawTools] = useState(false);
+  const [showEdgeTypeMenu, setShowEdgeTypeMenu] = useState<{ shapeId: string; edgeIndex: number; x: number; y: number } | null>(null);
+
   // Reset poly state when cursor mode changes
   useEffect(() => {
     setPolyPoints([]);
@@ -238,6 +251,36 @@ export default function PdfViewer({
         return;
       }
 
+      // Add edge mode: find nearest edge
+      if (cursorMode === "add_edge") {
+        const EDGE_THRESHOLD = 10; // pixels
+        let bestDist = Infinity;
+        let bestShapeId: string | null = null;
+        let bestEdgeIdx = -1;
+
+        for (const shape of rectangles.filter((r) => r.pageNumber === info.pageNumber)) {
+          const vertices = getShapeVertices(shape);
+          for (let i = 0; i < vertices.length; i++) {
+            const a = vertices[i];
+            const b = vertices[(i + 1) % vertices.length];
+            const d = distToSegment(info.x, info.y, a.x, a.y, b.x, b.y);
+            if (d < bestDist) {
+              bestDist = d;
+              bestShapeId = shape.id;
+              bestEdgeIdx = i;
+            }
+          }
+        }
+
+        if (bestDist < EDGE_THRESHOLD && bestShapeId) {
+          // Show edge type picker at click position
+          setShowEdgeTypeMenu({ shapeId: bestShapeId, edgeIndex: bestEdgeIdx, x: e.clientX, y: e.clientY });
+        } else {
+          setShowEdgeTypeMenu(null);
+        }
+        return;
+      }
+
       if (cursorMode === "calibrate") {
         setCalStartPoint({ x: info.x, y: info.y, page: info.pageNumber });
         setCalCurrentPoint({ x: info.x, y: info.y });
@@ -285,7 +328,7 @@ export default function PdfViewer({
       setCurrentPoint({ x: info.x, y: info.y });
       setDrawing(true);
     },
-    [pdfFile, getPageAndCoords, cursorMode, findShapeAtPoint, onSelectRect, onDeleteRect, polyPoints, polyPage, finishPolygon]
+    [pdfFile, getPageAndCoords, cursorMode, findShapeAtPoint, onSelectRect, onDeleteRect, polyPoints, polyPage, finishPolygon, rectangles]
   );
 
   const handleMouseMove = useCallback(
@@ -536,18 +579,20 @@ export default function PdfViewer({
       ? `Click to place points (${polyPoints.length} placed, need at least 3). Double-click or click first point to close.`
       : cursorMode === "add_polygon" && polyPoints.length >= 3
       ? `${polyPoints.length} points placed. Double-click or click first point to close. Press Esc to cancel.`
+      : cursorMode === "add_edge"
+      ? "Click on an edge of a shape to designate it as backsplash, waterfall, or mitered"
       : null;
 
   return (
     <div className="h-full flex flex-col min-h-0 min-w-0">
       {/* Toolbar */}
       <div className="flex items-center gap-2 px-4 py-2 bg-toolbar text-toolbar-foreground border-b border-sidebar-border shrink-0">
-        {/* Tool modes */}
+        {/* Tool modes: Select, Remove */}
         <div className="flex items-center bg-sidebar-accent rounded-md p-0.5 gap-0.5">
           {TOOL_MODES.map(({ mode, icon: Icon, label }) => (
             <button
               key={mode}
-              onClick={() => onCursorModeChange(mode)}
+              onClick={() => { onCursorModeChange(mode); setShowDrawTools(false); }}
               title={label}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
                 cursorMode === mode
@@ -563,24 +608,62 @@ export default function PdfViewer({
 
         <div className="w-px h-5 bg-sidebar-border mx-1" />
 
-        {/* Shape modes */}
-        <div className="flex items-center bg-sidebar-accent rounded-md p-0.5 gap-0.5">
-          {SHAPE_MODES.map(({ mode, icon: Icon, label }) => (
-            <button
-              key={mode}
-              onClick={() => onCursorModeChange(mode)}
-              title={label}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
-                cursorMode === mode
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                  : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
-              }`}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              {label}
-            </button>
-          ))}
+        {/* Draw button (toggles shape tools) */}
+        <div className="relative">
+          <button
+            onClick={() => {
+              setShowDrawTools((v) => !v);
+              if (!showDrawTools && !isDrawMode(cursorMode)) {
+                onCursorModeChange("add");
+              }
+            }}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
+              isDrawMode(cursorMode) || showDrawTools
+                ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                : "bg-sidebar-accent text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+            }`}
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            Draw
+            <ChevronDown className="w-3 h-3" />
+          </button>
         </div>
+
+        {/* Shape sub-tools (visible when Draw is active) */}
+        {(showDrawTools || isDrawMode(cursorMode)) && (
+          <div className="flex items-center bg-sidebar-accent rounded-md p-0.5 gap-0.5">
+            {SHAPE_MODES.map(({ mode, icon: Icon, label }) => (
+              <button
+                key={mode}
+                onClick={() => onCursorModeChange(mode)}
+                title={label}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
+                  cursorMode === mode
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                    : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="w-px h-5 bg-sidebar-border mx-1" />
+
+        {/* Add button (edge designations) */}
+        <button
+          onClick={() => onCursorModeChange("add_edge")}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
+            cursorMode === "add_edge"
+              ? "bg-sidebar-primary text-sidebar-primary-foreground"
+              : "bg-sidebar-accent text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+          }`}
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Add
+        </button>
 
         <div className="w-px h-5 bg-sidebar-border mx-1" />
 
@@ -809,6 +892,37 @@ export default function PdfViewer({
                   {/* Completed shapes */}
                   {pageRects.map((r) => renderShape(r, selectedRectId === r.id))}
 
+                  {/* Edge designations overlay */}
+                  {pageRects.some((r) => r.edges && r.edges.length > 0) && (
+                    <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 15, overflow: "visible" }}>
+                      {pageRects.flatMap((r) => {
+                        if (!r.edges || r.edges.length === 0) return [];
+                        const vertices = getShapeVertices(r);
+                        return r.edges.map((edge, ei) => {
+                          const a = vertices[edge.edgeIndex];
+                          const b = vertices[(edge.edgeIndex + 1) % vertices.length];
+                          const color = edge.type === "backsplash" ? "hsl(var(--warning))"
+                            : edge.type === "waterfall" ? "hsl(var(--accent))"
+                            : "hsl(var(--muted-foreground))";
+                          const midX = ((a.x + b.x) / 2) * zoom;
+                          const midY = ((a.y + b.y) / 2) * zoom;
+                          return (
+                            <g key={`${r.id}-edge-${ei}`}>
+                              <line
+                                x1={a.x * zoom} y1={a.y * zoom}
+                                x2={b.x * zoom} y2={b.y * zoom}
+                                stroke={color} strokeWidth={4} strokeLinecap="round"
+                              />
+                              <text x={midX} y={midY - 6} textAnchor="middle" fill={color} fontSize={10} fontWeight="bold">
+                                {edge.type === "backsplash" ? "BS" : edge.type === "waterfall" ? "WF" : "M"}
+                              </text>
+                            </g>
+                          );
+                        });
+                      })}
+                    </svg>
+                  )}
+
                   {/* Page number label */}
                   <div className="absolute bottom-2 right-2 text-[10px] font-mono bg-foreground/70 text-background px-1.5 py-0.5 rounded z-20">
                     {pageNum}
@@ -879,6 +993,65 @@ export default function PdfViewer({
                   Apply Scale
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edge type context menu */}
+        {showEdgeTypeMenu && (
+          <div
+            className="fixed z-[60] bg-card border border-border rounded-lg shadow-xl p-1 min-w-[140px]"
+            style={{ left: showEdgeTypeMenu.x, top: showEdgeTypeMenu.y }}
+          >
+            {EDGE_TYPES.map(({ type, label, defaultDepth }) => {
+              const shape = rectangles.find((r) => r.id === showEdgeTypeMenu.shapeId);
+              const existing = shape?.edges?.find((e) => e.edgeIndex === showEdgeTypeMenu.edgeIndex);
+              const isActive = existing?.type === type;
+              return (
+                <button
+                  key={type}
+                  onClick={() => {
+                    const shapeId = showEdgeTypeMenu.shapeId;
+                    const edgeIdx = showEdgeTypeMenu.edgeIndex;
+                    const shape = rectangles.find((r) => r.id === shapeId);
+                    if (!shape) return;
+
+                    let newEdges = [...(shape.edges || [])];
+                    const existingIdx = newEdges.findIndex((e) => e.edgeIndex === edgeIdx);
+
+                    if (isActive) {
+                      // Remove designation
+                      newEdges = newEdges.filter((e) => e.edgeIndex !== edgeIdx);
+                    } else if (existingIdx >= 0) {
+                      // Update type
+                      newEdges[existingIdx] = { edgeIndex: edgeIdx, type, depth: defaultDepth };
+                    } else {
+                      // Add new
+                      newEdges.push({ edgeIndex: edgeIdx, type, depth: defaultDepth });
+                    }
+
+                    onUpdateRect(shapeId, { edges: newEdges });
+                    setShowEdgeTypeMenu(null);
+                  }}
+                  className={`w-full text-left px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                    isActive
+                      ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                      : "text-foreground hover:bg-sidebar-accent"
+                  }`}
+                >
+                  {label}
+                  {type === "backsplash" && <span className="text-muted-foreground ml-1">(4in)</span>}
+                  {type === "waterfall" && <span className="text-muted-foreground ml-1">(3ft)</span>}
+                </button>
+              );
+            })}
+            <div className="border-t border-border mt-1 pt-1">
+              <button
+                onClick={() => setShowEdgeTypeMenu(null)}
+                className="w-full text-left px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded transition-colors"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         )}
