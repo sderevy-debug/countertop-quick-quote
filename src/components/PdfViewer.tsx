@@ -142,6 +142,7 @@ export default function PdfViewer({
   }, [totalPages]);
 
 
+  const handleFitWidth = useCallback(() => {
     if (!scrollAreaRef.current || !pdfPageWidth) return;
     const availableWidth = scrollAreaRef.current.clientWidth - 32;
     const newZoom = availableWidth / pdfPageWidth;
