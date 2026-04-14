@@ -96,7 +96,52 @@ export default function PdfViewer({
     setPolyMousePos(null);
   }, [cursorMode]);
 
-  const handleFitWidth = useCallback(() => {
+  // Track current visible page via IntersectionObserver
+  useEffect(() => {
+    const container = scrollAreaRef.current;
+    if (!container || totalPages === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        let bestPage = currentPage;
+        let bestRatio = 0;
+        for (const entry of entries) {
+          const pageNum = Number(entry.target.getAttribute("data-page-number"));
+          if (entry.intersectionRatio > bestRatio) {
+            bestRatio = entry.intersectionRatio;
+            bestPage = pageNum;
+          }
+        }
+        if (bestRatio > 0) {
+          setCurrentPage(bestPage);
+          setPageInputValue(String(bestPage));
+        }
+      },
+      { root: container, threshold: [0, 0.25, 0.5, 0.75, 1] }
+    );
+
+    // Observe after a short delay to let pages render
+    const timer = setTimeout(() => {
+      pageRefs.current.forEach((el) => observer.observe(el));
+    }, 300);
+
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, [totalPages, zoom]);
+
+  const goToPage = useCallback((pageNum: number) => {
+    const clamped = Math.max(1, Math.min(totalPages, pageNum));
+    const el = pageRefs.current.get(clamped);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    setCurrentPage(clamped);
+    setPageInputValue(String(clamped));
+  }, [totalPages]);
+
+
     if (!scrollAreaRef.current || !pdfPageWidth) return;
     const availableWidth = scrollAreaRef.current.clientWidth - 32;
     const newZoom = availableWidth / pdfPageWidth;
