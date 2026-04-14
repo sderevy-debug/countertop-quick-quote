@@ -328,7 +328,7 @@ export default function PdfViewer({
       setCurrentPoint({ x: info.x, y: info.y });
       setDrawing(true);
     },
-    [pdfFile, getPageAndCoords, cursorMode, findShapeAtPoint, onSelectRect, onDeleteRect, polyPoints, polyPage, finishPolygon]
+    [pdfFile, getPageAndCoords, cursorMode, findShapeAtPoint, onSelectRect, onDeleteRect, polyPoints, polyPage, finishPolygon, rectangles]
   );
 
   const handleMouseMove = useCallback(
