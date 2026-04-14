@@ -78,19 +78,69 @@ export default function PdfViewer({
   const [calCurrentPoint, setCalCurrentPoint] = useState<{ x: number; y: number } | null>(null);
   const [calDrawing, setCalDrawing] = useState(false);
 
+  // Current page tracking
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageInputValue, setPageInputValue] = useState("1");
+  const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+
   // Calibration input state
   const [showCalInput, setShowCalInput] = useState(false);
   const [calLengthValue, setCalLengthValue] = useState("");
   const [calUnit, setCalUnit] = useState<"ft" | "in">("ft");
   const [pendingCalLine, setPendingCalLine] = useState<CalibrationLine | null>(null);
   const calInputRef = useRef<HTMLInputElement>(null);
-
   // Reset poly state when cursor mode changes
   useEffect(() => {
     setPolyPoints([]);
     setPolyPage(null);
     setPolyMousePos(null);
   }, [cursorMode]);
+
+  // Track current visible page via IntersectionObserver
+  useEffect(() => {
+    const container = scrollAreaRef.current;
+    if (!container || totalPages === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        let bestPage = currentPage;
+        let bestRatio = 0;
+        for (const entry of entries) {
+          const pageNum = Number(entry.target.getAttribute("data-page-number"));
+          if (entry.intersectionRatio > bestRatio) {
+            bestRatio = entry.intersectionRatio;
+            bestPage = pageNum;
+          }
+        }
+        if (bestRatio > 0) {
+          setCurrentPage(bestPage);
+          setPageInputValue(String(bestPage));
+        }
+      },
+      { root: container, threshold: [0, 0.25, 0.5, 0.75, 1] }
+    );
+
+    // Observe after a short delay to let pages render
+    const timer = setTimeout(() => {
+      pageRefs.current.forEach((el) => observer.observe(el));
+    }, 300);
+
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, [totalPages, zoom]);
+
+  const goToPage = useCallback((pageNum: number) => {
+    const clamped = Math.max(1, Math.min(totalPages, pageNum));
+    const el = pageRefs.current.get(clamped);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    setCurrentPage(clamped);
+    setPageInputValue(String(clamped));
+  }, [totalPages]);
+
 
   const handleFitWidth = useCallback(() => {
     if (!scrollAreaRef.current || !pdfPageWidth) return;
@@ -547,9 +597,26 @@ export default function PdfViewer({
 
         <div className="w-px h-5 bg-sidebar-border mx-2" />
 
-        <span className="text-sm font-mono">
-          {totalPages} {totalPages === 1 ? "page" : "pages"}
-        </span>
+        <div className="flex items-center gap-1">
+          <input
+            type="text"
+            value={pageInputValue}
+            onChange={(e) => setPageInputValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const num = parseInt(pageInputValue, 10);
+                if (!isNaN(num)) goToPage(num);
+              }
+            }}
+            onBlur={() => {
+              const num = parseInt(pageInputValue, 10);
+              if (!isNaN(num)) goToPage(num);
+              else setPageInputValue(String(currentPage));
+            }}
+            className="w-10 text-center text-sm font-mono bg-sidebar-accent rounded px-1 py-0.5 border border-sidebar-border focus:outline-none focus:ring-1 focus:ring-sidebar-primary"
+          />
+          <span className="text-sm font-mono text-sidebar-foreground/70">/ {totalPages}</span>
+        </div>
 
         <div className="w-px h-5 bg-sidebar-border mx-2" />
 
@@ -621,6 +688,7 @@ export default function PdfViewer({
                 <div
                   key={pageNum}
                   data-page-number={pageNum}
+                  ref={(el) => { if (el) pageRefs.current.set(pageNum, el); }}
                   className="relative shadow-lg"
                   onMouseDown={handleMouseDown}
                 >
