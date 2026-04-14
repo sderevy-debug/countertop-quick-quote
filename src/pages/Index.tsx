@@ -182,6 +182,10 @@ const Index = () => {
     setSelectedRectId((prev) => (prev === id ? null : prev));
   }, []);
 
+  const handleUpdateRect = useCallback((id: string, updates: Partial<DrawnRectangle>) => {
+    setRectangles((prev) => prev.map((r) => r.id === id ? { ...r, ...updates } : r));
+  }, []);
+
   const handleClearAll = useCallback(() => {
     setRectangles([]);
     setSelectedRectId(null);
@@ -236,6 +240,7 @@ const Index = () => {
               rectangles={rectangles}
               onRectangleDrawn={handleRectangleDrawn}
               onDeleteRect={handleDeleteRect}
+              onUpdateRect={handleUpdateRect}
               scale={scale}
               onScaleChange={handleScaleChange}
               pdfFile={pdfFile}
