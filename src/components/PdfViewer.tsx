@@ -281,6 +281,7 @@ export default function PdfViewer({
         return;
       }
 
+      if (cursorMode === "calibrate") {
         setCalStartPoint({ x: info.x, y: info.y, page: info.pageNumber });
         setCalCurrentPoint({ x: info.x, y: info.y });
         setCalDrawing(true);
