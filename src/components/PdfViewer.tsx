@@ -549,18 +549,20 @@ export default function PdfViewer({
       ? `Click to place points (${polyPoints.length} placed, need at least 3). Double-click or click first point to close.`
       : cursorMode === "add_polygon" && polyPoints.length >= 3
       ? `${polyPoints.length} points placed. Double-click or click first point to close. Press Esc to cancel.`
+      : cursorMode === "add_edge"
+      ? "Click on an edge of a shape to designate it as backsplash, waterfall, or mitered"
       : null;
 
   return (
     <div className="h-full flex flex-col min-h-0 min-w-0">
       {/* Toolbar */}
       <div className="flex items-center gap-2 px-4 py-2 bg-toolbar text-toolbar-foreground border-b border-sidebar-border shrink-0">
-        {/* Tool modes */}
+        {/* Tool modes: Select, Remove */}
         <div className="flex items-center bg-sidebar-accent rounded-md p-0.5 gap-0.5">
           {TOOL_MODES.map(({ mode, icon: Icon, label }) => (
             <button
               key={mode}
-              onClick={() => onCursorModeChange(mode)}
+              onClick={() => { onCursorModeChange(mode); setShowDrawTools(false); }}
               title={label}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
                 cursorMode === mode
@@ -576,24 +578,62 @@ export default function PdfViewer({
 
         <div className="w-px h-5 bg-sidebar-border mx-1" />
 
-        {/* Shape modes */}
-        <div className="flex items-center bg-sidebar-accent rounded-md p-0.5 gap-0.5">
-          {SHAPE_MODES.map(({ mode, icon: Icon, label }) => (
-            <button
-              key={mode}
-              onClick={() => onCursorModeChange(mode)}
-              title={label}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
-                cursorMode === mode
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                  : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
-              }`}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              {label}
-            </button>
-          ))}
+        {/* Draw button (toggles shape tools) */}
+        <div className="relative">
+          <button
+            onClick={() => {
+              setShowDrawTools((v) => !v);
+              if (!showDrawTools && !isDrawMode(cursorMode)) {
+                onCursorModeChange("add");
+              }
+            }}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
+              isDrawMode(cursorMode) || showDrawTools
+                ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                : "bg-sidebar-accent text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+            }`}
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            Draw
+            <ChevronDown className="w-3 h-3" />
+          </button>
         </div>
+
+        {/* Shape sub-tools (visible when Draw is active) */}
+        {(showDrawTools || isDrawMode(cursorMode)) && (
+          <div className="flex items-center bg-sidebar-accent rounded-md p-0.5 gap-0.5">
+            {SHAPE_MODES.map(({ mode, icon: Icon, label }) => (
+              <button
+                key={mode}
+                onClick={() => onCursorModeChange(mode)}
+                title={label}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
+                  cursorMode === mode
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                    : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="w-px h-5 bg-sidebar-border mx-1" />
+
+        {/* Add button (edge designations) */}
+        <button
+          onClick={() => onCursorModeChange("add_edge")}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
+            cursorMode === "add_edge"
+              ? "bg-sidebar-primary text-sidebar-primary-foreground"
+              : "bg-sidebar-accent text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+          }`}
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Add
+        </button>
 
         <div className="w-px h-5 bg-sidebar-border mx-1" />
 
