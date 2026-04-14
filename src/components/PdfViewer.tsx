@@ -597,9 +597,26 @@ export default function PdfViewer({
 
         <div className="w-px h-5 bg-sidebar-border mx-2" />
 
-        <span className="text-sm font-mono">
-          {totalPages} {totalPages === 1 ? "page" : "pages"}
-        </span>
+        <div className="flex items-center gap-1">
+          <input
+            type="text"
+            value={pageInputValue}
+            onChange={(e) => setPageInputValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const num = parseInt(pageInputValue, 10);
+                if (!isNaN(num)) goToPage(num);
+              }
+            }}
+            onBlur={() => {
+              const num = parseInt(pageInputValue, 10);
+              if (!isNaN(num)) goToPage(num);
+              else setPageInputValue(String(currentPage));
+            }}
+            className="w-10 text-center text-sm font-mono bg-sidebar-accent rounded px-1 py-0.5 border border-sidebar-border focus:outline-none focus:ring-1 focus:ring-sidebar-primary"
+          />
+          <span className="text-sm font-mono text-sidebar-foreground/70">/ {totalPages}</span>
+        </div>
 
         <div className="w-px h-5 bg-sidebar-border mx-2" />
 
@@ -671,6 +688,7 @@ export default function PdfViewer({
                 <div
                   key={pageNum}
                   data-page-number={pageNum}
+                  ref={(el) => { if (el) pageRefs.current.set(pageNum, el); }}
                   className="relative shadow-lg"
                   onMouseDown={handleMouseDown}
                 >
