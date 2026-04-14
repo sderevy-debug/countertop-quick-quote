@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
-import { DrawnRectangle, CursorMode, CalibrationLine, Point, boundingBox, pointInPolygon } from "@/types/estimation";
-import { ZoomIn, ZoomOut, Upload, MousePointer, Minus, Maximize2, Square, Triangle, Hexagon } from "lucide-react";
+import { DrawnRectangle, CursorMode, CalibrationLine, Point, EdgeType, EdgeDesignation, boundingBox, pointInPolygon, getShapeVertices, distToSegment } from "@/types/estimation";
+import { ZoomIn, ZoomOut, Upload, MousePointer, Minus, Maximize2, Square, Triangle, Hexagon, Pencil, Plus, ChevronDown } from "lucide-react";
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
@@ -9,6 +9,7 @@ interface PdfViewerProps {
   rectangles: DrawnRectangle[];
   onRectangleDrawn: (rect: Omit<DrawnRectangle, "id" | "label" | "realWidth" | "realHeight" | "area" | "floor" | "room">) => void;
   onDeleteRect: (id: string) => void;
+  onUpdateRect: (id: string, updates: Partial<DrawnRectangle>) => void;
   scale: number;
   onScaleChange: (scale: number) => void;
   pdfFile: File | null;
