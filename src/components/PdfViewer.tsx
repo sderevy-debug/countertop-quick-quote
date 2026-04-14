@@ -78,13 +78,17 @@ export default function PdfViewer({
   const [calCurrentPoint, setCalCurrentPoint] = useState<{ x: number; y: number } | null>(null);
   const [calDrawing, setCalDrawing] = useState(false);
 
+  // Current page tracking
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageInputValue, setPageInputValue] = useState("1");
+  const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+
   // Calibration input state
   const [showCalInput, setShowCalInput] = useState(false);
   const [calLengthValue, setCalLengthValue] = useState("");
   const [calUnit, setCalUnit] = useState<"ft" | "in">("ft");
   const [pendingCalLine, setPendingCalLine] = useState<CalibrationLine | null>(null);
   const calInputRef = useRef<HTMLInputElement>(null);
-
   // Reset poly state when cursor mode changes
   useEffect(() => {
     setPolyPoints([]);
