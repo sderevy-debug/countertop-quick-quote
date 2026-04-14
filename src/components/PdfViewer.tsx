@@ -50,6 +50,7 @@ export default function PdfViewer({
   rectangles,
   onRectangleDrawn,
   onDeleteRect,
+  onUpdateRect,
   scale,
   onScaleChange,
   pdfFile,
