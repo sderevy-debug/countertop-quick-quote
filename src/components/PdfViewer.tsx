@@ -40,6 +40,12 @@ const SHAPE_MODES: { mode: CursorMode; icon: typeof Square; label: string }[] = 
 const isDrawMode = (mode: CursorMode) => mode === "add" || mode === "add_triangle" || mode === "add_polygon";
 const isPointMode = (mode: CursorMode) => mode === "add_triangle" || mode === "add_polygon";
 
+const EDGE_TYPES: { type: EdgeType; label: string; defaultDepth: number }[] = [
+  { type: "backsplash", label: "Backsplash", defaultDepth: 4 },    // 4 inches
+  { type: "waterfall", label: "Waterfall", defaultDepth: 36 },      // 3 feet = 36 inches
+  { type: "mitered", label: "Mitered", defaultDepth: 0 },
+];
+
 export default function PdfViewer({
   rectangles,
   onRectangleDrawn,
