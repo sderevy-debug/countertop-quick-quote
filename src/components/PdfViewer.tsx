@@ -251,7 +251,36 @@ export default function PdfViewer({
         return;
       }
 
-      if (cursorMode === "calibrate") {
+      // Add edge mode: find nearest edge
+      if (cursorMode === "add_edge") {
+        const EDGE_THRESHOLD = 10; // pixels
+        let bestDist = Infinity;
+        let bestShapeId: string | null = null;
+        let bestEdgeIdx = -1;
+
+        for (const shape of rectangles.filter((r) => r.pageNumber === info.pageNumber)) {
+          const vertices = getShapeVertices(shape);
+          for (let i = 0; i < vertices.length; i++) {
+            const a = vertices[i];
+            const b = vertices[(i + 1) % vertices.length];
+            const d = distToSegment(info.x, info.y, a.x, a.y, b.x, b.y);
+            if (d < bestDist) {
+              bestDist = d;
+              bestShapeId = shape.id;
+              bestEdgeIdx = i;
+            }
+          }
+        }
+
+        if (bestDist < EDGE_THRESHOLD && bestShapeId) {
+          // Show edge type picker at click position
+          setShowEdgeTypeMenu({ shapeId: bestShapeId, edgeIndex: bestEdgeIdx, x: e.clientX, y: e.clientY });
+        } else {
+          setShowEdgeTypeMenu(null);
+        }
+        return;
+      }
+
         setCalStartPoint({ x: info.x, y: info.y, page: info.pageNumber });
         setCalCurrentPoint({ x: info.x, y: info.y });
         setCalDrawing(true);
